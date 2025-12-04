@@ -1327,6 +1327,44 @@ body{
   .footer-inner{ gap: 14px; }
   .footer-nav a{ font-size:14px; }
   .contact-item{ font-size:13px; gap:10px; }
+  .footer-nav .footer-list {
+    display: flex;
+    flex-wrap: wrap;        /* allows items to wrap to next line */
+    gap: 12px 20px;         /* row-gap column-gap */
+    padding: 0;
+  }
+
+  .footer-nav .footer-list li {
+    margin: 0;              /* remove the vertical li margin */
+  }
+  .footer-inner {
+    display: grid;
+    grid-template-columns: 1fr; /* single column */
+  }
+
+  .footer-col--logo {
+    order: 1;
+  }
+
+  .footer-contact {
+    order: 2;
+  }
+
+  .footer-nav {
+    order: 3;
+    padding-bottom: 15px;
+  }
+
+  .footer-copy {
+    order: 4;  /* ensure copyright is last */
+    text-align: left; /* optional: align like other content */
+  }
+  .footer-copy .copyright{
+  
+    line-height:1;
+   
+  }
 }
+
 
   

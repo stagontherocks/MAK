@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading — GrabMyStone</title>
+<link rel="icon" href="images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:#111111;color:#eeeeee;
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+
+  .navbar{
+    position:sticky;top:0;z-index:100;
+    background:#111111;border-bottom:1px solid #262626;
+  }
+  .navbar .wrap{
+    height:58px;display:flex;align-items:center;justify-content:space-between;gap:24px;
+  }
+  .nav-links{display:flex;align-items:center;gap:8px}
+  .nav-links a{
+    padding:10px 16px;border-radius:999px;font-weight:600;font-size:13px;
+    color:#c2c2c2;text-decoration:none;transition:background .15s ease,color .15s ease;
+  }
+  .nav-links a:hover{background:#1c1c1c;color:#ffffff}
+  .nav-links a.up{color:#2ecc71}
+  .nav-links a.up:hover{background:rgba(46,204,113,.12)}
+  .nav-links a.down{color:#ff4d4f}
+  .nav-links a.down:hover{background:rgba(255,77,79,.12)}
+
+  .nav-tickers{display:flex;align-items:center;gap:22px}
+  .ticker{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600}
+  .ticker-label{color:#787878}
+  .ticker-value{font-variant-numeric:tabular-nums;color:#eeeeee}
+  .ticker-value.up{color:#2ecc71}
+  .ticker-value.down{color:#ff4d4f}
+  .ticker-divider{width:1px;height:16px;background:#262626}
+  .nav-links a.active{background:#1c1c1c;color:#ffffff}
+
+  main{padding:32px 0 64px}
+
+  .grid-toolbar{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;
+  }
+  .month-select{
+    appearance:none;-webkit-appearance:none;
+    background:#161616 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23787878" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>') no-repeat right 12px center/14px;
+    border:1px solid #262626;color:#eeeeee;
+    font-family:inherit;font-size:13px;font-weight:600;
+    padding:9px 34px 9px 14px;border-radius:8px;cursor:pointer;
+  }
+  .month-select:hover{border-color:#3a3a3a}
+  .month-select:focus{outline:none;border-color:#4a4a4a}
+  .month-select:disabled{opacity:.5;cursor:not-allowed}
+  .month-select:disabled:hover{border-color:#262626}
+  .clock{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#c2c2c2}
+  .clock-tz{
+    font-size:11px;font-weight:700;color:#787878;background:#1c1c1c;padding:2px 7px;border-radius:999px;
+  }
+  .clock-value{font-variant-numeric:tabular-nums;color:#eeeeee}
+
+  .grid-card{
+    background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
+  }
+  .grid-scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:1040px}
+  thead th{
+    background:#1a1a1a;
+    text-align:right;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:#787878;padding:12px 16px;border-bottom:1px solid #262626;white-space:nowrap;
+  }
+  thead th:first-child{text-align:left}
+  tbody td{
+    padding:12px 16px;font-size:13px;text-align:right;border-bottom:1px solid #1e1e1e;
+    font-variant-numeric:tabular-nums;color:#eeeeee;white-space:nowrap;
+  }
+  tbody td:first-child{text-align:left;font-weight:700}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover td{background:#1c1c1c}
+  .price-up{color:#2ecc71}
+  .price-down{color:#ff4d4f}
+</style>
+</head>
+<body>
+
+<header class="navbar">
+  <div class="wrap">
+    <nav class="nav-links">
+      <a href="#" class="active">Arbitrage</a>
+      <a href="#" class="down">Down 15%</a>
+      <a href="#" class="up">Up 15%</a>
+    </nav>
+    <div class="nav-tickers">
+      <span class="ticker"><span class="ticker-label">Nifty:</span><span class="ticker-value up">24,850.30</span></span>
+      <span class="ticker-divider"></span>
+      <span class="ticker"><span class="ticker-label">Banknifty:</span><span class="ticker-value down">51,240.75</span></span>
+      <span class="ticker-divider"></span>
+      <span class="ticker"><span class="ticker-label">VIX:</span><span class="ticker-value">13.42</span></span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="grid-toolbar">
+      <select class="month-select" id="expirySelect" aria-label="Expiry month" disabled>
+        <option value="current">Current Month</option>
+        <option value="next">Next Month</option>
+        <option value="far">Far Month</option>
+      </select>
+      <div class="clock">
+        <span class="clock-tz">IST</span>
+        <span class="clock-value" id="clockValue">—</span>
+      </div>
+    </div>
+    <div class="grid-card">
+      <div class="grid-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Stock Name</th>
+              <th>LTP</th>
+              <th>Lot Size</th>
+              <th>Current Future Price</th>
+              <th>Near Month</th>
+              <th>Far Month</th>
+              <th>Diff (Fut − LTP)</th>
+              <th>Diff (Near − LTP)</th>
+              <th>Diff (Far − LTP)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>RELIANCE</td>
+              <td>2,945.60</td>
+              <td>500</td>
+              <td>2,948.20</td>
+              <td>2,951.10</td>
+              <td>2,962.15</td>
+              <td class="price-up">+2.60</td>
+              <td class="price-up">+5.50</td>
+              <td class="price-up">+16.55</td>
+            </tr>
+            <tr>
+              <td>TCS</td>
+              <td>4,182.30</td>
+              <td>175</td>
+              <td>4,178.50</td>
+              <td>4,190.75</td>
+              <td>4,208.90</td>
+              <td class="price-down">-3.80</td>
+              <td class="price-up">+8.45</td>
+              <td class="price-up">+26.60</td>
+            </tr>
+            <tr>
+              <td>HDFCBANK</td>
+              <td>1,678.45</td>
+              <td>550</td>
+              <td>1,681.20</td>
+              <td>1,674.90</td>
+              <td>1,693.10</td>
+              <td class="price-up">+2.75</td>
+              <td class="price-down">-3.55</td>
+              <td class="price-up">+14.65</td>
+            </tr>
+            <tr>
+              <td>INFY</td>
+              <td>1,542.80</td>
+              <td>400</td>
+              <td>1,545.35</td>
+              <td>1,548.90</td>
+              <td>1,536.15</td>
+              <td class="price-up">+2.55</td>
+              <td class="price-up">+6.10</td>
+              <td class="price-down">-6.65</td>
+            </tr>
+            <tr>
+              <td>SBIN</td>
+              <td>812.55</td>
+              <td>1,500</td>
+              <td>809.90</td>
+              <td>815.20</td>
+              <td>824.75</td>
+              <td class="price-down">-2.65</td>
+              <td class="price-up">+2.65</td>
+              <td class="price-up">+12.20</td>
+            </tr>
+            <tr>
+              <td>ICICIBANK</td>
+              <td>1,235.90</td>
+              <td>700</td>
+              <td>1,238.60</td>
+              <td>1,232.15</td>
+              <td>1,248.95</td>
+              <td class="price-up">+2.70</td>
+              <td class="price-down">-3.75</td>
+              <td class="price-up">+13.05</td>
+            </tr>
+            <tr>
+              <td>AXISBANK</td>
+              <td>1,098.20</td>
+              <td>625</td>
+              <td>1,101.45</td>
+              <td>1,104.90</td>
+              <td>1,111.80</td>
+              <td class="price-up">+3.25</td>
+              <td class="price-up">+6.70</td>
+              <td class="price-up">+13.60</td>
+            </tr>
+            <tr>
+              <td>TATASTEEL</td>
+              <td>148.35</td>
+              <td>4,250</td>
+              <td>147.60</td>
+              <td>149.20</td>
+              <td>152.15</td>
+              <td class="price-down">-0.75</td>
+              <td class="price-up">+0.85</td>
+              <td class="price-up">+3.80</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  var clockEl = document.getElementById('clockValue');
+  var clockFmt = new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+  });
+  function tickClock(){
+    clockEl.textContent = clockFmt.format(new Date());
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+</script>
+
+</body>
+</html>

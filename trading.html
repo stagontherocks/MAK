@@ -60,6 +60,13 @@
   .month-select:focus{outline:none;border-color:#4a4a4a}
   .month-select:disabled{opacity:.5;cursor:not-allowed}
   .month-select:disabled:hover{border-color:#262626}
+  .grid-toolbar-right{display:flex;align-items:center;gap:18px}
+  .connect-btn{
+    display:inline-flex;align-items:center;padding:9px 16px;border-radius:8px;
+    background:#2ecc71;color:#0d1f14;font-size:13px;font-weight:700;text-decoration:none;
+    transition:background .15s ease;
+  }
+  .connect-btn:hover{background:#3ee082}
   .clock{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#c2c2c2}
   .clock-tz{
     font-size:11px;font-weight:700;color:#787878;background:#1c1c1c;padding:2px 7px;border-radius:999px;
@@ -115,9 +122,12 @@
         <option value="next">Next Month</option>
         <option value="far">Far Month</option>
       </select>
-      <div class="clock">
-        <span class="clock-tz">IST</span>
-        <span class="clock-value" id="clockValue">—</span>
+      <div class="grid-toolbar-right">
+        <a href="/api/jainam/login" class="connect-btn">Connect Broker</a>
+        <div class="clock">
+          <span class="clock-tz">IST</span>
+          <span class="clock-value" id="clockValue">—</span>
+        </div>
       </div>
     </div>
     <div class="grid-card">

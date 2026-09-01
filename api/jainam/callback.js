@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
 // Jainam redirects the user's browser here after login, with authCode + userId
-// in the query string. We exchange those (plus our secret) for a userSession,
+// in the query string. We exchange those (plus our secret) for an accessToken,
 // then hand the browser back to trading.html via an httpOnly cookie.
 module.exports = async (req, res) => {
   const { authCode, userId } = req.query;
@@ -29,15 +29,17 @@ module.exports = async (req, res) => {
       body: JSON.stringify({ checkSum }),
     });
     const data = await jainamRes.json();
+    // Jainam returns a single-element array: [{ accessToken, clientId }]
+    const record = Array.isArray(data) ? data[0] : data;
 
-    if (!jainamRes.ok || !data.userSession) {
+    if (!jainamRes.ok || !record || !record.accessToken) {
       res.status(502).send('Jainam login exchange failed: ' + JSON.stringify(data));
       return;
     }
 
     res.setHeader('Set-Cookie', [
-      `jainam_session=${data.userSession}; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=28800`,
-      `jainam_user=${encodeURIComponent(userId)}; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=28800`,
+      `jainam_session=${record.accessToken}; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=28800`,
+      `jainam_user=${encodeURIComponent(record.clientId || userId)}; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=28800`,
     ]);
 
     res.writeHead(302, { Location: '/trading.html' });

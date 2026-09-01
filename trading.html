@@ -76,9 +76,10 @@
   .grid-card{
     background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
   }
-  .grid-scroll{overflow-x:auto}
+  .grid-scroll{overflow:auto;max-height:calc(100vh - 220px)}
   table{width:100%;border-collapse:collapse;min-width:1040px}
   thead th{
+    position:sticky;top:0;z-index:1;
     background:#1a1a1a;
     text-align:right;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
     color:#787878;padding:12px 16px;border-bottom:1px solid #262626;white-space:nowrap;
@@ -93,6 +94,7 @@
   tbody tr:hover td{background:#1c1c1c}
   .price-up{color:#2ecc71}
   .price-down{color:#ff4d4f}
+  .price-pending{color:#4a4a4a}
 </style>
 </head>
 <body>
@@ -146,96 +148,7 @@
               <th>Diff (Far − LTP)</th>
             </tr>
           </thead>
-          <tbody>
-            <tr>
-              <td>RELIANCE</td>
-              <td>2,945.60</td>
-              <td>500</td>
-              <td>2,948.20</td>
-              <td>2,951.10</td>
-              <td>2,962.15</td>
-              <td class="price-up">+2.60</td>
-              <td class="price-up">+5.50</td>
-              <td class="price-up">+16.55</td>
-            </tr>
-            <tr>
-              <td>TCS</td>
-              <td>4,182.30</td>
-              <td>175</td>
-              <td>4,178.50</td>
-              <td>4,190.75</td>
-              <td>4,208.90</td>
-              <td class="price-down">-3.80</td>
-              <td class="price-up">+8.45</td>
-              <td class="price-up">+26.60</td>
-            </tr>
-            <tr>
-              <td>HDFCBANK</td>
-              <td>1,678.45</td>
-              <td>550</td>
-              <td>1,681.20</td>
-              <td>1,674.90</td>
-              <td>1,693.10</td>
-              <td class="price-up">+2.75</td>
-              <td class="price-down">-3.55</td>
-              <td class="price-up">+14.65</td>
-            </tr>
-            <tr>
-              <td>INFY</td>
-              <td>1,542.80</td>
-              <td>400</td>
-              <td>1,545.35</td>
-              <td>1,548.90</td>
-              <td>1,536.15</td>
-              <td class="price-up">+2.55</td>
-              <td class="price-up">+6.10</td>
-              <td class="price-down">-6.65</td>
-            </tr>
-            <tr>
-              <td>SBIN</td>
-              <td>812.55</td>
-              <td>1,500</td>
-              <td>809.90</td>
-              <td>815.20</td>
-              <td>824.75</td>
-              <td class="price-down">-2.65</td>
-              <td class="price-up">+2.65</td>
-              <td class="price-up">+12.20</td>
-            </tr>
-            <tr>
-              <td>ICICIBANK</td>
-              <td>1,235.90</td>
-              <td>700</td>
-              <td>1,238.60</td>
-              <td>1,232.15</td>
-              <td>1,248.95</td>
-              <td class="price-up">+2.70</td>
-              <td class="price-down">-3.75</td>
-              <td class="price-up">+13.05</td>
-            </tr>
-            <tr>
-              <td>AXISBANK</td>
-              <td>1,098.20</td>
-              <td>625</td>
-              <td>1,101.45</td>
-              <td>1,104.90</td>
-              <td>1,111.80</td>
-              <td class="price-up">+3.25</td>
-              <td class="price-up">+6.70</td>
-              <td class="price-up">+13.60</td>
-            </tr>
-            <tr>
-              <td>TATASTEEL</td>
-              <td>148.35</td>
-              <td>4,250</td>
-              <td>147.60</td>
-              <td>149.20</td>
-              <td>152.15</td>
-              <td class="price-down">-0.75</td>
-              <td class="price-up">+0.85</td>
-              <td class="price-up">+3.80</td>
-            </tr>
-          </tbody>
+          <tbody id="gridBody"></tbody>
         </table>
       </div>
     </div>
@@ -243,6 +156,238 @@
 </main>
 
 <script>
+  // NSE F&O eligible stocks with current lot size (source: NSE fo_mktlots, Sep 2026 series).
+  // LTP / future / diff columns are placeholders until the live quote feed is wired in.
+  var FO_STOCKS = [
+    ["360ONE", 500],
+    ["ABB", 125],
+    ["ABCAPITAL", 3100],
+    ["ADANIENSOL", 675],
+    ["ADANIENT", 309],
+    ["ADANIGREEN", 600],
+    ["ADANIPORTS", 475],
+    ["ADANIPOWER", 3550],
+    ["ALKEM", 125],
+    ["AMBER", 100],
+    ["AMBUJACEM", 1200],
+    ["ANGELONE", 2500],
+    ["APLAPOLLO", 350],
+    ["APOLLOHOSP", 125],
+    ["ASHOKLEY", 5000],
+    ["ASIANPAINT", 250],
+    ["ASTRAL", 425],
+    ["ATHERENERG", 375],
+    ["AUBANK", 1000],
+    ["AUROPHARMA", 550],
+    ["AXISBANK", 625],
+    ["BAJAJ-AUTO", 75],
+    ["BAJAJFINSV", 300],
+    ["BAJAJHLDNG", 75],
+    ["BAJFINANCE", 750],
+    ["BANDHANBNK", 3600],
+    ["BANKBARODA", 2925],
+    ["BANKINDIA", 5200],
+    ["BDL", 425],
+    ["BEL", 1425],
+    ["BHARATFORG", 500],
+    ["BHARTIARTL", 475],
+    ["BHEL", 2625],
+    ["BIOCON", 2500],
+    ["BLUESTARCO", 325],
+    ["BOSCHLTD", 25],
+    ["BPCL", 1975],
+    ["BRITANNIA", 125],
+    ["BSE", 200],
+    ["CAMS", 825],
+    ["CANBK", 6750],
+    ["CDSL", 475],
+    ["CGPOWER", 850],
+    ["CHOLAFIN", 625],
+    ["CIPLA", 425],
+    ["COALINDIA", 1350],
+    ["COCHINSHIP", 400],
+    ["COFORGE", 475],
+    ["COLPAL", 275],
+    ["CONCOR", 1250],
+    ["CROMPTON", 2150],
+    ["CUMMINSIND", 200],
+    ["DABUR", 1250],
+    ["DELHIVERY", 2075],
+    ["DIVISLAB", 100],
+    ["DIXON", 50],
+    ["DLF", 950],
+    ["DMART", 150],
+    ["DRREDDY", 625],
+    ["EICHERMOT", 100],
+    ["ETERNAL", 2425],
+    ["FEDERALBNK", 2500],
+    ["FORCEMOT", 25],
+    ["FORTIS", 775],
+    ["GAIL", 3550],
+    ["GLENMARK", 375],
+    ["GMRAIRPORT", 6975],
+    ["GODFRYPHLP", 275],
+    ["GODREJCP", 500],
+    ["GODREJPROP", 325],
+    ["GRASIM", 250],
+    ["GVT&D", 125],
+    ["HAL", 150],
+    ["HAVELLS", 500],
+    ["HCLTECH", 400],
+    ["HDFCAMC", 300],
+    ["HDFCBANK", 650],
+    ["HDFCLIFE", 1100],
+    ["HEROMOTOCO", 150],
+    ["HINDALCO", 700],
+    ["HINDPETRO", 2025],
+    ["HINDUNILVR", 300],
+    ["HINDZINC", 1225],
+    ["HYUNDAI", 275],
+    ["ICICIBANK", 700],
+    ["ICICIGI", 325],
+    ["ICICIPRULI", 925],
+    ["IDEA", 71475],
+    ["IDFCFIRSTB", 9275],
+    ["IEX", 4350],
+    ["INDHOTEL", 1000],
+    ["INDIANB", 1000],
+    ["INDIGO", 150],
+    ["INDUSINDBK", 700],
+    ["INDUSTOWER", 1700],
+    ["INFY", 400],
+    ["INOXWIND", 6400],
+    ["IOC", 4875],
+    ["IREDA", 4525],
+    ["IRFC", 5425],
+    ["ITC", 1725],
+    ["JINDALSTEL", 625],
+    ["JIOFIN", 2350],
+    ["JSWENERGY", 1075],
+    ["JSWSTEEL", 675],
+    ["JUBLFOOD", 1250],
+    ["KALYANKJIL", 1350],
+    ["KAYNES", 150],
+    ["KEI", 175],
+    ["KFINTECH", 575],
+    ["KOTAKBANK", 2000],
+    ["KPITTECH", 775],
+    ["LAURUSLABS", 850],
+    ["LICHSGFIN", 1000],
+    ["LICI", 1400],
+    ["LODHA", 625],
+    ["LT", 175],
+    ["LTF", 2250],
+    ["LTM", 150],
+    ["LUPIN", 425],
+    ["M&M", 200],
+    ["MAHABANK", 6500],
+    ["MANAPPURAM", 3000],
+    ["MANKIND", 250],
+    ["MARICO", 1200],
+    ["MARUTI", 50],
+    ["MAXHEALTH", 525],
+    ["MAZDOCK", 225],
+    ["MCX", 225],
+    ["MFSL", 400],
+    ["MOTHERSON", 6150],
+    ["MOTILALOFS", 775],
+    ["MPHASIS", 275],
+    ["MUTHOOTFIN", 275],
+    ["NAM-INDIA", 625],
+    ["NATIONALUM", 1875],
+    ["NAUKRI", 550],
+    ["NBCC", 6500],
+    ["NESTLEIND", 500],
+    ["NHPC", 6950],
+    ["NMDC", 6750],
+    ["NTPC", 1500],
+    ["NYKAA", 3125],
+    ["OBEROIRLTY", 350],
+    ["OFSS", 100],
+    ["OIL", 1400],
+    ["ONGC", 2250],
+    ["PAGEIND", 20],
+    ["PATANJALI", 1075],
+    ["PAYTM", 725],
+    ["PERSISTENT", 125],
+    ["PETRONET", 1900],
+    ["PFC", 1300],
+    ["PGEL", 950],
+    ["PHOENIXLTD", 350],
+    ["PIDILITIND", 500],
+    ["PIIND", 175],
+    ["PNB", 8000],
+    ["PNBHOUSING", 650],
+    ["POLICYBZR", 350],
+    ["POLYCAB", 125],
+    ["POWERGRID", 1900],
+    ["POWERINDIA", 25],
+    ["PREMIERENE", 650],
+    ["PRESTIGE", 450],
+    ["RADICO", 150],
+    ["RBLBANK", 3175],
+    ["RECLTD", 1575],
+    ["RELIANCE", 500],
+    ["RVNL", 1925],
+    ["SAGILITY", 12000],
+    ["SAIL", 4700],
+    ["SBICARD", 800],
+    ["SBILIFE", 375],
+    ["SBIN", 750],
+    ["SHREECEM", 25],
+    ["SHRIRAMFIN", 825],
+    ["SIEMENS", 175],
+    ["SOLARINDS", 50],
+    ["SONACOMS", 1225],
+    ["SRF", 200],
+    ["SUNPHARMA", 350],
+    ["SUPREMEIND", 175],
+    ["SUZLON", 12700],
+    ["SWIGGY", 1825],
+    ["TATACONSUM", 550],
+    ["TATAELXSI", 125],
+    ["TATAPOWER", 1450],
+    ["TATASTEEL", 2750],
+    ["TCS", 225],
+    ["TECHM", 600],
+    ["TIINDIA", 200],
+    ["TITAN", 175],
+    ["TMPV", 1600],
+    ["TORNTPHARM", 125],
+    ["TRENT", 225],
+    ["TVSMOTOR", 175],
+    ["ULTRACEMCO", 50],
+    ["UNIONBANK", 4425],
+    ["UNITDSPR", 400],
+    ["UNOMINDA", 550],
+    ["UPL", 1355],
+    ["VBL", 1275],
+    ["VEDL", 1150],
+    ["VMM", 4850],
+    ["VOLTAS", 375],
+    ["WAAREEENER", 175],
+    ["WIPRO", 3000],
+    ["YESBANK", 31100],
+    ["ZYDUSLIFE", 900]
+  ];
+
+  var gridBody = document.getElementById('gridBody');
+  var rowsHtml = FO_STOCKS.map(function(stock){
+    var symbol = stock[0], lot = stock[1];
+    return '<tr>' +
+      '<td>' + symbol + '</td>' +
+      '<td class="price-pending">—</td>' +
+      '<td>' + lot.toLocaleString('en-IN') + '</td>' +
+      '<td class="price-pending">—</td>' +
+      '<td class="price-pending">—</td>' +
+      '<td class="price-pending">—</td>' +
+      '<td class="price-pending">—</td>' +
+      '<td class="price-pending">—</td>' +
+      '<td class="price-pending">—</td>' +
+      '</tr>';
+  }).join('');
+  gridBody.innerHTML = rowsHtml;
+
   var clockEl = document.getElementById('clockValue');
   var clockFmt = new Intl.DateTimeFormat('en-IN', {
     timeZone: 'Asia/Kolkata',

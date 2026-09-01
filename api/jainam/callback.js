@@ -29,8 +29,10 @@ module.exports = async (req, res) => {
       body: JSON.stringify({ checkSum }),
     });
     const data = await jainamRes.json();
-    // Jainam returns a single-element array: [{ accessToken, clientId }]
-    const record = Array.isArray(data) ? data[0] : data;
+    // Jainam wraps the payload: { status, message, result: [{ accessToken, clientId }] }
+    // Handle that, a bare array, or a bare object, since the exact shape has moved before.
+    const list = Array.isArray(data.result) ? data.result : (Array.isArray(data) ? data : [data]);
+    const record = list[0];
 
     if (!jainamRes.ok || !record || !record.accessToken) {
       res.status(502).send('Jainam login exchange failed: ' + JSON.stringify(data));

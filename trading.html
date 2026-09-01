@@ -49,17 +49,16 @@
   .grid-toolbar{
     display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;
   }
-  .month-select{
-    appearance:none;-webkit-appearance:none;
-    background:#161616 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23787878" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>') no-repeat right 12px center/14px;
+  .search-input{
+    background:#161616 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23787878" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') no-repeat 14px center/14px;
     border:1px solid #262626;color:#eeeeee;
     font-family:inherit;font-size:13px;font-weight:600;
-    padding:9px 34px 9px 14px;border-radius:8px;cursor:pointer;
+    padding:9px 14px 9px 38px;border-radius:8px;
+    width:220px;
   }
-  .month-select:hover{border-color:#3a3a3a}
-  .month-select:focus{outline:none;border-color:#4a4a4a}
-  .month-select:disabled{opacity:.5;cursor:not-allowed}
-  .month-select:disabled:hover{border-color:#262626}
+  .search-input::placeholder{color:#787878;font-weight:500}
+  .search-input:hover{border-color:#3a3a3a}
+  .search-input:focus{outline:none;border-color:#4a4a4a}
   .grid-toolbar-right{display:flex;align-items:center;gap:18px}
   .connect-btn{
     display:inline-flex;align-items:center;padding:9px 16px;border-radius:8px;
@@ -119,11 +118,7 @@
 <main>
   <div class="wrap">
     <div class="grid-toolbar">
-      <select class="month-select" id="expirySelect" aria-label="Expiry month" disabled>
-        <option value="current">Current Month</option>
-        <option value="next">Next Month</option>
-        <option value="far">Far Month</option>
-      </select>
+      <input type="text" class="search-input" id="stockSearch" placeholder="Search stock..." aria-label="Search stocks">
       <div class="grid-toolbar-right">
         <a href="/api/jainam/login" class="connect-btn">Connect Broker</a>
         <div class="clock">
@@ -445,6 +440,16 @@
       .catch(function(){ /* keep last known values on transient network errors */ })
       .then(function(){ setTimeout(pollQuotes, QUOTE_POLL_MS); });
   }
+
+  var searchInput = document.getElementById('stockSearch');
+  searchInput.addEventListener('input', function(){
+    var term = searchInput.value.trim().toUpperCase();
+    var rows = gridBody.querySelectorAll('tr');
+    for (var i = 0; i < rows.length; i++) {
+      var symbol = rows[i].getAttribute('data-symbol') || '';
+      rows[i].style.display = symbol.indexOf(term) !== -1 ? '' : 'none';
+    }
+  });
 
   fetch('source/fo-stocks.json')
     .then(function(res){ return res.json(); })

@@ -156,9 +156,7 @@
 </main>
 
 <script>
-  // NSE F&O eligible stocks with current lot size (source: NSE fo_mktlots, Sep 2026 series).
-  // LTP / future / diff columns are placeholders until the live quote feed is wired in.
-  var FO_STOCKS = [
+  var FO_STOCKS_FALLBACK = [
     ["360ONE", 500],
     ["ABB", 125],
     ["ABCAPITAL", 3100],
@@ -372,21 +370,89 @@
   ];
 
   var gridBody = document.getElementById('gridBody');
-  var rowsHtml = FO_STOCKS.map(function(stock){
-    var symbol = stock[0], lot = stock[1];
-    return '<tr>' +
-      '<td>' + symbol + '</td>' +
-      '<td class="price-pending">—</td>' +
-      '<td>' + lot.toLocaleString('en-IN') + '</td>' +
-      '<td class="price-pending">—</td>' +
-      '<td class="price-pending">—</td>' +
-      '<td class="price-pending">—</td>' +
-      '<td class="price-pending">—</td>' +
-      '<td class="price-pending">—</td>' +
-      '<td class="price-pending">—</td>' +
-      '</tr>';
-  }).join('');
-  gridBody.innerHTML = rowsHtml;
+  var lastPrices = {};
+
+  function renderRows(stocks){
+    var rowsHtml = stocks.map(function(stock){
+      var symbol = stock[0], lot = stock[1];
+      return '<tr data-symbol="' + symbol + '">' +
+        '<td>' + symbol + '</td>' +
+        '<td class="price-pending c-ltp">—</td>' +
+        '<td>' + lot.toLocaleString('en-IN') + '</td>' +
+        '<td class="price-pending c-fut0">—</td>' +
+        '<td class="price-pending c-fut1">—</td>' +
+        '<td class="price-pending c-fut2">—</td>' +
+        '<td class="price-pending c-diff0">—</td>' +
+        '<td class="price-pending c-diff1">—</td>' +
+        '<td class="price-pending c-diff2">—</td>' +
+        '</tr>';
+    }).join('');
+    gridBody.innerHTML = rowsHtml;
+  }
+
+  function setCell(cell, value, previous){
+    cell.classList.remove('price-pending');
+    cell.textContent = value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    cell.classList.remove('price-up', 'price-down');
+    if (previous !== null && previous !== undefined) {
+      if (value > previous) cell.classList.add('price-up');
+      else if (value < previous) cell.classList.add('price-down');
+    }
+  }
+
+  function applyQuotes(quotes){
+    Object.keys(quotes).forEach(function(symbol){
+      var row = gridBody.querySelector('tr[data-symbol="' + symbol + '"]');
+      if (!row) return;
+      var q = quotes[symbol];
+      var prev = lastPrices[symbol] || {};
+      var next = {};
+
+      if (q.ltp !== null && q.ltp !== undefined) {
+        setCell(row.querySelector('.c-ltp'), q.ltp, prev.ltp);
+        next.ltp = q.ltp;
+      } else {
+        next.ltp = prev.ltp;
+      }
+
+      var futClasses = ['.c-fut0', '.c-fut1', '.c-fut2'];
+      var diffClasses = ['.c-diff0', '.c-diff1', '.c-diff2'];
+      next.futures = [];
+      q.futures.forEach(function(price, i){
+        next.futures[i] = (price !== null && price !== undefined) ? price : (prev.futures && prev.futures[i]);
+        if (price !== null && price !== undefined) {
+          setCell(row.querySelector(futClasses[i]), price, prev.futures && prev.futures[i]);
+        }
+        if (next.futures[i] !== undefined && next.ltp !== undefined) {
+          var diff = next.futures[i] - next.ltp;
+          var prevDiff = (prev.futures && prev.futures[i] !== undefined && prev.ltp !== undefined)
+            ? prev.futures[i] - prev.ltp : undefined;
+          setCell(row.querySelector(diffClasses[i]), diff, prevDiff);
+        }
+      });
+
+      lastPrices[symbol] = next;
+    });
+  }
+
+  var QUOTE_POLL_MS = 4000;
+  function pollQuotes(){
+    fetch('/api/jainam/quotes')
+      .then(function(res){ return res.json().then(function(body){ return { ok: res.ok, body: body }; }); })
+      .then(function(result){
+        if (result.ok && result.body.quotes) applyQuotes(result.body.quotes);
+      })
+      .catch(function(){ /* keep last known values on transient network errors */ })
+      .then(function(){ setTimeout(pollQuotes, QUOTE_POLL_MS); });
+  }
+
+  fetch('source/fo-stocks.json')
+    .then(function(res){ return res.json(); })
+    .catch(function(){ return FO_STOCKS_FALLBACK; })
+    .then(function(stocks){
+      renderRows(stocks);
+      pollQuotes();
+    });
 
   var clockEl = document.getElementById('clockValue');
   var clockFmt = new Intl.DateTimeFormat('en-IN', {

@@ -1,0 +1,7 @@
+{
+  "name": "grabmystone-trading",
+  "private": true,
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

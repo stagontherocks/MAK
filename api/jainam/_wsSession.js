@@ -22,30 +22,47 @@ function extractSessionId(rawBody) {
   return record.sessionId || record.SessionID || record.session_id || record.sessionID;
 }
 
-async function requestWsSession(method, userId, accessToken) {
-  const params = new URLSearchParams({ source: 'API', userId, token: accessToken });
-  const isGet = method === 'GET';
-  const res = await fetch(isGet ? `${CREATE_WS_SESS_URL}?${params}` : CREATE_WS_SESS_URL, {
-    method,
-    headers: {
-      // Doc's Request Headers example shows the raw JWT with no "Bearer " prefix.
-      Authorization: accessToken,
-      ...(isGet ? {} : { 'Content-Type': 'application/json' }),
-    },
-    ...(isGet ? {} : { body: JSON.stringify({ source: 'API', userId, token: accessToken }) }),
-  });
+// The gateway itself requires the standard "Authorization: Bearer <token>"
+// form to let a request through at all (confirmed: dropping "Bearer " gets
+// a gateway-level 401 with an empty body, same as a flat-out invalid
+// token -- despite the doc's Request Headers example showing a bare JWT).
+async function requestWsSession(mode, userId, accessToken) {
+  const fields = { source: 'API', userId, token: accessToken };
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  let url = CREATE_WS_SESS_URL;
+  let body;
+
+  if (mode === 'get') {
+    url = `${CREATE_WS_SESS_URL}?${new URLSearchParams(fields)}`;
+  } else if (mode === 'form') {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    body = new URLSearchParams(fields).toString();
+  } else {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify(fields);
+  }
+
+  const res = await fetch(url, { method: mode === 'get' ? 'GET' : 'POST', headers, body });
   const rawBody = await res.text();
   return { res, rawBody };
 }
 
-// The docs say POST, but Jainam's actual routing has been inconsistent
-// about which method a given endpoint accepts -- fall back to GET on a
-// method-rejection response instead of costing another round trip to find out.
-async function createWsSession(userId, accessToken) {
-  let { res, rawBody } = await requestWsSession('POST', userId, accessToken);
+function isMethodOrRouteRejection(res, rawBody) {
+  return res.status === 404 || res.status === 405 || /method/i.test(rawBody);
+}
 
-  if (res.status === 404 || res.status === 405 || /method/i.test(rawBody)) {
-    ({ res, rawBody } = await requestWsSession('GET', userId, accessToken));
+// The docs say "POST, JSON body" but Jainam's actual routing has
+// disagreed with its own docs multiple times -- work through the other
+// plausible shapes (form-encoded body, then GET with query params)
+// instead of costing another round trip with the user to find out.
+async function createWsSession(userId, accessToken) {
+  let { res, rawBody } = await requestWsSession('json', userId, accessToken);
+
+  if (isMethodOrRouteRejection(res, rawBody)) {
+    ({ res, rawBody } = await requestWsSession('form', userId, accessToken));
+  }
+  if (isMethodOrRouteRejection(res, rawBody)) {
+    ({ res, rawBody } = await requestWsSession('get', userId, accessToken));
   }
 
   let sessionId;

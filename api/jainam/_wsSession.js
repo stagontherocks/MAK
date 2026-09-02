@@ -30,19 +30,28 @@ async function requestWsSession(mode, userId, accessToken) {
   const fields = { source: 'API', userId, token: accessToken };
   const headers = { Authorization: `Bearer ${accessToken}` };
   let url = CREATE_WS_SESS_URL;
+  let method = 'POST';
   let body;
 
   if (mode === 'get') {
+    method = 'GET';
     url = `${CREATE_WS_SESS_URL}?${new URLSearchParams(fields)}`;
   } else if (mode === 'form') {
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
     body = new URLSearchParams(fields).toString();
+  } else if (mode === 'json-array') {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify([fields]);
+  } else if (mode === 'put') {
+    method = 'PUT';
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify(fields);
   } else {
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(fields);
   }
 
-  const res = await fetch(url, { method: mode === 'get' ? 'GET' : 'POST', headers, body });
+  const res = await fetch(url, { method, headers, body });
   const rawBody = await res.text();
   return { res, rawBody };
 }
@@ -51,18 +60,17 @@ function isMethodOrRouteRejection(res, rawBody) {
   return res.status === 404 || res.status === 405 || /method/i.test(rawBody);
 }
 
-// The docs say "POST, JSON body" but Jainam's actual routing has
-// disagreed with its own docs multiple times -- work through the other
-// plausible shapes (form-encoded body, then GET with query params)
-// instead of costing another round trip with the user to find out.
+// The docs say "POST, bare-object JSON body" but Jainam's actual routing
+// has disagreed with its own docs multiple times -- work through the
+// other plausible shapes instead of costing another round trip with the
+// user to find out: array-wrapped body (their Place/Modify Order
+// convention), form-encoded, PUT, then GET with query params.
 async function createWsSession(userId, accessToken) {
+  const fallbackModes = ['json-array', 'form', 'put', 'get'];
   let { res, rawBody } = await requestWsSession('json', userId, accessToken);
 
-  if (isMethodOrRouteRejection(res, rawBody)) {
-    ({ res, rawBody } = await requestWsSession('form', userId, accessToken));
-  }
-  if (isMethodOrRouteRejection(res, rawBody)) {
-    ({ res, rawBody } = await requestWsSession('get', userId, accessToken));
+  for (let i = 0; i < fallbackModes.length && isMethodOrRouteRejection(res, rawBody); i++) {
+    ({ res, rawBody } = await requestWsSession(fallbackModes[i], userId, accessToken));
   }
 
   let sessionId;

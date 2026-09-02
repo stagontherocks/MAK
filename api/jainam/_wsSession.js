@@ -20,13 +20,21 @@ async function createWsSession(userId, accessToken) {
     },
     body: JSON.stringify({ source: 'API', userId, token: accessToken }),
   });
-  const data = await res.json();
+
+  const rawBody = await res.text();
+  let data;
+  try {
+    data = JSON.parse(rawBody);
+  } catch (_) {
+    throw new Error(`createWsSess returned non-JSON (status ${res.status}): ${rawBody.slice(0, 300)}`);
+  }
+
   const list = Array.isArray(data.result) ? data.result : (Array.isArray(data) ? data : [data]);
   const record = list[0] || {};
   const sessionId = record.sessionId || record.SessionID || record.session_id || record.sessionID;
 
   if (!res.ok || !sessionId) {
-    throw new Error(`createWsSess failed: ${JSON.stringify(data)}`);
+    throw new Error(`createWsSess failed (status ${res.status}): ${rawBody.slice(0, 300)}`);
   }
   return sessionId;
 }

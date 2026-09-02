@@ -68,6 +68,7 @@
     font-family:inherit;padding:0;
   }
   .search-clear:hover{background:#3a3a3a;color:#ffffff}
+  .search-clear[hidden]{display:none}
   .grid-toolbar-right{display:flex;align-items:center;gap:18px}
   .connect-btn{
     display:inline-flex;align-items:center;padding:9px 16px;border-radius:8px;
@@ -75,8 +76,8 @@
     transition:background .15s ease;
   }
   .connect-btn:hover{background:#3ee082}
-  .connect-btn.connected{background:#1c1c1c;color:#787878;cursor:default;pointer-events:none}
-  .connect-btn.connected::before{content:'●';color:#2ecc71;font-size:9px;margin-right:7px}
+  .connect-btn.connected{background:#1c1c1c;color:#ff4d4f;border:1px solid #262626}
+  .connect-btn.connected:hover{background:rgba(255,77,79,.12)}
   .clock{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#c2c2c2}
   .clock-tz{
     font-size:11px;font-weight:700;color:#787878;background:#1c1c1c;padding:2px 7px;border-radius:999px;
@@ -447,9 +448,9 @@
   var connectBtn = document.getElementById('connectBtn');
   function markBrokerConnected(){
     if (connectBtn.classList.contains('connected')) return;
-    connectBtn.removeAttribute('href');
+    connectBtn.setAttribute('href', '/api/jainam/logout');
     connectBtn.classList.add('connected');
-    connectBtn.textContent = 'Connected to Broker';
+    connectBtn.textContent = 'Disconnect';
   }
 
   var QUOTE_POLL_MS = 4000;

@@ -12,13 +12,10 @@ function sha256Hex(input) {
 }
 
 async function createWsSession(userId, accessToken) {
-  const res = await fetch('https://protrade.jainam.in/api/client-rest/profile/createWsSess', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ source: 'API', userId, token: accessToken }),
+  const params = new URLSearchParams({ source: 'API', userId, token: accessToken });
+  const res = await fetch(`https://protrade.jainam.in/api/client-rest/profile/createWsSess?${params}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   const rawBody = await res.text();

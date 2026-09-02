@@ -11,10 +11,9 @@ function sha256Hex(input) {
   return crypto.createHash('sha256').update(input).digest('hex');
 }
 
-// Same base URL Jainam's own official Postman collection uses for every
-// other REST call (orders, portfolio, profile): BASE_OPENAPI_LIVE =
-// https://protrade.jainam.in/omt/api-order-rest.
-const CREATE_WS_SESS_URL = 'https://protrade.jainam.in/omt/api-order-rest/v1/profile/createWsSess';
+// Exactly the path from Jainam's WebSocket Streaming doc's "Create Session"
+// section: https://protrade.jainam.in/open-apidocs/v2/WebSocket%20streaming.html
+const CREATE_WS_SESS_URL = 'https://protrade.jainam.in/api/client-rest/profile/createWsSess';
 
 function extractSessionId(rawBody) {
   const data = JSON.parse(rawBody);
@@ -29,7 +28,8 @@ async function requestWsSession(method, userId, accessToken) {
   const res = await fetch(isGet ? `${CREATE_WS_SESS_URL}?${params}` : CREATE_WS_SESS_URL, {
     method,
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      // Doc's Request Headers example shows the raw JWT with no "Bearer " prefix.
+      Authorization: accessToken,
       ...(isGet ? {} : { 'Content-Type': 'application/json' }),
     },
     ...(isGet ? {} : { body: JSON.stringify({ source: 'API', userId, token: accessToken }) }),

@@ -75,6 +75,8 @@
     transition:background .15s ease;
   }
   .connect-btn:hover{background:#3ee082}
+  .connect-btn.connected{background:#1c1c1c;color:#787878;cursor:default;pointer-events:none}
+  .connect-btn.connected::before{content:'●';color:#2ecc71;font-size:9px;margin-right:7px}
   .clock{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#c2c2c2}
   .clock-tz{
     font-size:11px;font-weight:700;color:#787878;background:#1c1c1c;padding:2px 7px;border-radius:999px;
@@ -132,7 +134,7 @@
         <button type="button" class="search-clear" id="stockSearchClear" aria-label="Clear search" hidden>&times;</button>
       </div>
       <div class="grid-toolbar-right">
-        <a href="/api/jainam/login" class="connect-btn">Connect Broker</a>
+        <a href="/api/jainam/login" class="connect-btn" id="connectBtn">Connect Broker</a>
         <div class="clock">
           <span class="clock-tz">IST</span>
           <span class="clock-value" id="clockValue">—</span>
@@ -442,10 +444,21 @@
     });
   }
 
+  var connectBtn = document.getElementById('connectBtn');
+  function markBrokerConnected(){
+    if (connectBtn.classList.contains('connected')) return;
+    connectBtn.removeAttribute('href');
+    connectBtn.classList.add('connected');
+    connectBtn.textContent = 'Connected to Broker';
+  }
+
   var QUOTE_POLL_MS = 4000;
   function pollQuotes(){
     fetch('/api/jainam/quotes')
-      .then(function(res){ return res.json().then(function(body){ return { ok: res.ok, body: body }; }); })
+      .then(function(res){
+        if (res.status !== 401) markBrokerConnected();
+        return res.json().then(function(body){ return { ok: res.ok, body: body }; });
+      })
       .then(function(result){
         if (result.ok && result.body.quotes) applyQuotes(result.body.quotes);
       })

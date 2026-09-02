@@ -82,7 +82,20 @@ async function getSusertoken(userId, accessToken) {
   const cached = cache.get(accessToken);
   if (cached && Date.now() - cached.builtAt < CACHE_TTL_MS) return cached.susertoken;
 
-  const sessionId = await createWsSession(userId, accessToken);
+  let sessionId;
+  try {
+    sessionId = await createWsSession(userId, accessToken);
+  } catch (_) {
+    // createWsSess has failed against every method/path/body combination we
+    // can construct from the docs. Fall back to a different hypothesis: for
+    // the vendor-SSO flow, the REST accessToken itself may already be usable
+    // directly as the WS "Session Id" the docs say to double-SHA256, with no
+    // separate bridging call needed. If this is also wrong, the WS server
+    // will reject the connect frame ({"t":"ck","s":"NOT_OK"}) and quotes.js
+    // surfaces that as a distinct, informative error.
+    sessionId = accessToken;
+  }
+
   const susertoken = sha256Hex(sha256Hex(sessionId));
   cache.set(accessToken, { susertoken, builtAt: Date.now() });
   return susertoken;

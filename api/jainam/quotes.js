@@ -6,6 +6,9 @@ const WS_URL = 'wss://ws.jainam.in/NorenWSTP/';
 const COLLECT_WINDOW_MS = 4500;
 const SUBSCRIBE_CHUNK_SIZE = 200;
 
+// NSE index tokens, from Jainam's INDICES contract master (protrade.jainam.in/contract/csv/indices).
+const INDEX_TOKENS = { NIFTY: '26000', BANKNIFTY: '26009', VIX: '26017' };
+
 function parseCookies(req) {
   if (req.cookies) return req.cookies;
   const header = req.headers.cookie || '';
@@ -18,22 +21,17 @@ function parseCookies(req) {
   return out;
 }
 
-function buildTokenIndex(instrumentMap) {
-  const legByToken = new Map();
-  const subscribeKeys = [];
+function buildSubscribeKeys(instrumentMap) {
+  const subscribeKeys = Object.values(INDEX_TOKENS).map((token) => `NSE|${token}`);
   for (const symbol in instrumentMap) {
     const { spotToken, futures } = instrumentMap[symbol];
-    legByToken.set(spotToken, { symbol, leg: 'spot' });
     subscribeKeys.push(`NSE|${spotToken}`);
-    futures.forEach((f, i) => {
-      legByToken.set(f.token, { symbol, leg: `fut${i}` });
-      subscribeKeys.push(`NFO|${f.token}`);
-    });
+    futures.forEach((f) => subscribeKeys.push(`NFO|${f.token}`));
   }
-  return { legByToken, subscribeKeys };
+  return subscribeKeys;
 }
 
-function collectQuotes(susertoken, userId, subscribeKeys, legByToken) {
+function collectQuotes(susertoken, userId, subscribeKeys) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(WS_URL);
     const prices = new Map();
@@ -75,8 +73,7 @@ function collectQuotes(susertoken, userId, subscribeKeys, legByToken) {
       }
 
       if ((msg.t === 'tk' || msg.t === 'tf') && msg.tk && msg.lp !== undefined) {
-        const leg = legByToken.get(msg.tk);
-        if (leg) prices.set(msg.tk, parseFloat(msg.lp));
+        prices.set(msg.tk, parseFloat(msg.lp));
       }
     });
 
@@ -97,9 +94,9 @@ module.exports = async (req, res) => {
 
   try {
     const instrumentMap = await getInstrumentMap();
-    const { legByToken, subscribeKeys } = buildTokenIndex(instrumentMap);
+    const subscribeKeys = buildSubscribeKeys(instrumentMap);
     const susertoken = await getSusertoken(userId, accessToken);
-    const prices = await collectQuotes(susertoken, userId, subscribeKeys, legByToken);
+    const prices = await collectQuotes(susertoken, userId, subscribeKeys);
 
     const out = {};
     for (const symbol in instrumentMap) {
@@ -110,7 +107,13 @@ module.exports = async (req, res) => {
       };
     }
 
-    res.status(200).json({ status: 'ok', quotes: out });
+    const indices = {};
+    for (const name in INDEX_TOKENS) {
+      const token = INDEX_TOKENS[name];
+      indices[name] = prices.has(token) ? prices.get(token) : null;
+    }
+
+    res.status(200).json({ status: 'ok', quotes: out, indices });
   } catch (err) {
     res.status(502).json({ error: 'quote_fetch_failed', message: err.message });
   }

@@ -39,8 +39,6 @@
   .ticker{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600}
   .ticker-label{color:#787878}
   .ticker-value{font-variant-numeric:tabular-nums;color:#eeeeee}
-  .ticker-value.up{color:#2ecc71}
-  .ticker-value.down{color:#ff4d4f}
   .ticker-divider{width:1px;height:16px;background:#262626}
   .nav-links a.active{background:#1c1c1c;color:#ffffff}
 
@@ -118,11 +116,11 @@
       <a href="#" class="up">Up 15%</a>
     </nav>
     <div class="nav-tickers">
-      <span class="ticker"><span class="ticker-label">Nifty:</span><span class="ticker-value up">24,850.30</span></span>
+      <span class="ticker"><span class="ticker-label">Nifty:</span><span class="ticker-value" id="tickerNifty">—</span></span>
       <span class="ticker-divider"></span>
-      <span class="ticker"><span class="ticker-label">Banknifty:</span><span class="ticker-value down">51,240.75</span></span>
+      <span class="ticker"><span class="ticker-label">Banknifty:</span><span class="ticker-value" id="tickerBanknifty">—</span></span>
       <span class="ticker-divider"></span>
-      <span class="ticker"><span class="ticker-label">VIX:</span><span class="ticker-value">13.42</span></span>
+      <span class="ticker"><span class="ticker-label">VIX:</span><span class="ticker-value" id="tickerVix">—</span></span>
     </div>
   </div>
 </header>
@@ -445,6 +443,17 @@
     });
   }
 
+  var lastIndices = {};
+  var tickerEls = { NIFTY: document.getElementById('tickerNifty'), BANKNIFTY: document.getElementById('tickerBanknifty'), VIX: document.getElementById('tickerVix') };
+  function applyIndices(indices){
+    Object.keys(tickerEls).forEach(function(name){
+      var value = indices && indices[name];
+      if (value === null || value === undefined) return;
+      setCell(tickerEls[name], value, lastIndices[name]);
+      lastIndices[name] = value;
+    });
+  }
+
   var connectBtn = document.getElementById('connectBtn');
   function markBrokerConnected(){
     if (connectBtn.classList.contains('connected')) return;
@@ -462,6 +471,7 @@
       })
       .then(function(result){
         if (result.ok && result.body.quotes) applyQuotes(result.body.quotes);
+        if (result.ok && result.body.indices) applyIndices(result.body.indices);
       })
       .catch(function(){ /* keep last known values on transient network errors */ })
       .then(function(){ setTimeout(pollQuotes, QUOTE_POLL_MS); });

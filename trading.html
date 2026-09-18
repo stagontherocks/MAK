@@ -377,6 +377,10 @@
     ["ZYDUSLIFE", 900]
   ];
 
+  // Lot sizes from Fyers' live NSE_FO symbol master (idx futures, not equities,
+  // so they don't live in fo-stocks.json alongside the 210 stocks).
+  var INDEX_ROWS = [["NIFTY", 65], ["BANKNIFTY", 30]];
+
   var gridBody = document.getElementById('gridBody');
   var lastPrices = {};
 
@@ -514,7 +518,7 @@
     .then(function(res){ return res.json(); })
     .catch(function(){ return FO_STOCKS_FALLBACK; })
     .then(function(stocks){
-      renderRows(stocks);
+      renderRows(INDEX_ROWS.concat(stocks));
       pollQuotes();
     });
 

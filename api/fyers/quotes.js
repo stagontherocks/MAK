@@ -88,8 +88,13 @@ module.exports = async (req, res) => {
       futures.forEach((f) => symbols.push(f.symbol));
     }
 
+    // NIFTY/BANKNIFTY show up both in INDEX_SYMBOLS (navbar tickers) and in
+    // instrumentMap (grid rows) with the same spot symbol -- dedupe so each
+    // chunk isn't wasting a slot on a symbol already requested elsewhere.
+    const uniqueSymbols = Array.from(new Set(symbols));
+
     const authHeader = `${appId}:${accessToken}`;
-    const prices = await fetchAllQuotes(symbols, authHeader);
+    const prices = await fetchAllQuotes(uniqueSymbols, authHeader);
 
     const out = {};
     for (const symbol in instrumentMap) {

@@ -17,6 +17,11 @@ let cache = { builtAt: 0, map: null };
 // downloaded rows, not the docs.
 const COL = { SYMBOL: 9, SHORT_NAME: 13, OPTION_TYPE: 16, EXPIRY_TS: 8 };
 
+// Index futures don't have an equity spot row in NSE_CM.csv, so their spot
+// symbol is hardcoded to the fixed index symbol (same ones quotes.js already
+// uses for the navbar tickers) instead of coming from spotBySymbol below.
+const INDEX_SPOT_SYMBOLS = { NIFTY: 'NSE:NIFTY50-INDEX', BANKNIFTY: 'NSE:NIFTYBANK-INDEX' };
+
 function parseCsv(text) {
   return text.split(/\r?\n/).filter(Boolean).map((line) => line.split(','));
 }
@@ -63,6 +68,11 @@ async function buildInstrumentMap() {
     const futures = (futuresBySymbol[symbol] || []).slice(0, 3);
     if (!spotSymbol || futures.length === 0) continue;
     map[symbol] = { spotSymbol, futures };
+  }
+  for (const symbol in INDEX_SPOT_SYMBOLS) {
+    const futures = (futuresBySymbol[symbol] || []).slice(0, 3);
+    if (futures.length === 0) continue;
+    map[symbol] = { spotSymbol: INDEX_SPOT_SYMBOLS[symbol], futures };
   }
   return map;
 }

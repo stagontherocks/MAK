@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>High IV Stocks — GrabMyStone</title>
+<link rel="icon" href="images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:#111111;color:#eeeeee;
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+
+  .navbar{
+    position:sticky;top:0;z-index:100;
+    background:#111111;border-bottom:1px solid #262626;
+  }
+  .navbar .wrap{
+    height:58px;display:flex;align-items:center;justify-content:space-between;gap:24px;
+  }
+  .nav-links{display:flex;align-items:center;gap:8px}
+  .nav-links a{
+    padding:10px 16px;border-radius:999px;font-weight:600;font-size:13px;
+    color:#c2c2c2;text-decoration:none;transition:background .15s ease,color .15s ease;
+  }
+  .nav-links a:hover{background:#1c1c1c;color:#ffffff}
+  .nav-links a.active{background:#1c1c1c;color:#ffffff}
+
+  .connect-btn{
+    display:inline-flex;align-items:center;padding:9px 16px;border-radius:8px;
+    background:#2ecc71;color:#0d1f14;font-size:13px;font-weight:700;text-decoration:none;
+    transition:background .15s ease;
+  }
+  .connect-btn:hover{background:#3ee082}
+  .connect-btn.connected{background:#1c1c1c;color:#ff4d4f;border:1px solid #262626}
+  .connect-btn.connected:hover{background:rgba(255,77,79,.12)}
+
+  main{padding:32px 0 64px}
+  .screener-status{font-size:13px;font-weight:600;color:#787878;margin-bottom:16px}
+
+  .grid-card{
+    background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
+  }
+  .grid-scroll{overflow:auto;max-height:calc(100vh - 220px)}
+  table{width:100%;border-collapse:collapse;min-width:640px}
+  thead th{
+    position:sticky;top:0;z-index:1;
+    background:#1a1a1a;
+    text-align:right;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:#787878;padding:12px 16px;border-bottom:1px solid #262626;white-space:nowrap;
+  }
+  thead th:first-child{text-align:left}
+  tbody td{
+    padding:12px 16px;font-size:13px;text-align:right;border-bottom:1px solid #1e1e1e;
+    font-variant-numeric:tabular-nums;color:#eeeeee;white-space:nowrap;
+  }
+  tbody td:first-child{text-align:left;font-weight:700}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover td{background:#1c1c1c}
+  .down{color:#ff4d4f}
+</style>
+</head>
+<body>
+
+<header class="navbar">
+  <div class="wrap">
+    <nav class="nav-links">
+      <a href="trading.html">Arbitrage</a>
+      <a href="#" class="down">Down 15%</a>
+      <a href="#">Up 15%</a>
+      <a href="hiv-stocks.html" class="active">High IV</a>
+    </nav>
+    <a href="/api/fyers/login" class="connect-btn" id="connectBtn">Connect Broker</a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="screener-status" id="screenerStatus">Starting screen...</div>
+    <div class="grid-card">
+      <div class="grid-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Stock Name</th>
+              <th>6-Month Change</th>
+              <th>Realized Vol Rank</th>
+              <th>Option IV</th>
+            </tr>
+          </thead>
+          <tbody id="screenerBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  var connectBtn = document.getElementById('connectBtn');
+  function markBrokerConnected(){
+    if (connectBtn.classList.contains('connected')) return;
+    connectBtn.setAttribute('href', '/api/fyers/logout');
+    connectBtn.classList.add('connected');
+    connectBtn.textContent = 'Disconnect';
+  }
+  function markBrokerDisconnected(){
+    connectBtn.setAttribute('href', '/api/fyers/login');
+    connectBtn.classList.remove('connected');
+    connectBtn.textContent = 'Connect Broker';
+  }
+  connectBtn.addEventListener('click', function(e){
+    if (!connectBtn.classList.contains('connected')) return;
+    e.preventDefault();
+    fetch('/api/fyers/logout').catch(function(){}).then(function(){ markBrokerDisconnected(); });
+  });
+
+  var BATCH_LIMIT = 15;
+  var rows = [];
+  var statusEl = document.getElementById('screenerStatus');
+  var tbody = document.getElementById('screenerBody');
+
+  function renderRows(){
+    var sorted = rows.slice().sort(function(a, b){ return b.volRank - a.volRank; });
+    tbody.innerHTML = sorted.map(function(r){
+      return '<tr>' +
+        '<td>' + r.symbol + '</td>' +
+        '<td class="down">' + r.sixMonthChangePct.toFixed(1) + '%</td>' +
+        '<td>' + r.volRank.toFixed(0) + '</td>' +
+        '<td>' + (r.optionIv !== null && r.optionIv !== undefined ? r.optionIv.toFixed(1) : '—') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function fetchBatch(offset){
+    fetch('/api/fyers/screener?offset=' + offset + '&limit=' + BATCH_LIMIT)
+      .then(function(res){
+        if (res.status === 401) {
+          statusEl.textContent = 'Connect your broker (top right) to run the screener.';
+          return null;
+        }
+        markBrokerConnected();
+        return res.json();
+      })
+      .then(function(body){
+        if (!body) return;
+        if (body.status !== 'ok') {
+          statusEl.textContent = 'Screener failed: ' + (body.message || body.error || 'unknown error');
+          return;
+        }
+        rows = rows.concat(body.results);
+        renderRows();
+        var scanned = Math.min(offset + BATCH_LIMIT, body.total);
+        if (body.nextOffset !== null) {
+          statusEl.textContent = 'Screening ' + scanned + '/' + body.total + '...';
+          fetchBatch(body.nextOffset);
+        } else {
+          statusEl.textContent = 'Done — ' + rows.length + ' match' + (rows.length === 1 ? '' : 'es') + ' found (of ' + body.total + ' F&O stocks screened).';
+        }
+      })
+      .catch(function(){
+        statusEl.textContent = 'Network error, retrying...';
+        setTimeout(function(){ fetchBatch(offset); }, 3000);
+      });
+  }
+
+  fetchBatch(0);
+</script>
+</body>
+</html>

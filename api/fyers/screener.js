@@ -55,6 +55,140 @@ function volRank(candles) {
   return (countBelowOrEqual / rollingVols.length) * 100;
 }
 
-module.exports = {};
+const { getInstrumentMap } = require('./_contracts');
+
+const HISTORY_URL = 'https://api-t1.fyers.in/data/history';
+const OPTION_CHAIN_URL = 'https://api-t1.fyers.in/data/options-chain-v3';
+const HISTORY_RANGE_DAYS = 366;
+const FETCH_CONCURRENCY = 8;
+const FETCH_SPACING_MS = 1000;
+const DOWN_THRESHOLD_PCT = -30;
+const CACHE_TTL_MS = 20 * 60 * 60 * 1000;
+const DEFAULT_LIMIT = 15;
+const MAX_LIMIT = 50;
+
+const batchCache = new Map(); // key: "offset:limit" -> { builtAt, payload }
+
+function parseCookies(req) {
+  if (req.cookies) return req.cookies;
+  const header = req.headers.cookie || '';
+  const out = {};
+  header.split(';').forEach((part) => {
+    const idx = part.indexOf('=');
+    if (idx === -1) return;
+    out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+  });
+  return out;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchHistory(spotSymbol, authHeader) {
+  const now = Math.floor(Date.now() / 1000);
+  const from = now - HISTORY_RANGE_DAYS * 24 * 60 * 60;
+  const params = new URLSearchParams({
+    symbol: spotSymbol, resolution: 'D', date_format: '0',
+    range_from: String(from), range_to: String(now),
+  });
+  const res = await fetch(`${HISTORY_URL}?${params}`, { headers: { Authorization: authHeader, version: '2.0' } });
+  const data = await res.json();
+  if (!res.ok || data.s !== 'ok' || !Array.isArray(data.candles)) return null;
+  return data.candles;
+}
+
+// Response shape for IV is unconfirmed against a real Fyers account (see
+// spec) -- probe the plausible shapes and return null rather than throwing
+// if none match, so a wrong guess here never breaks the screener itself.
+async function fetchOptionIv(spotSymbol, authHeader) {
+  try {
+    const params = new URLSearchParams({ symbol: spotSymbol, strikecount: '1' });
+    const res = await fetch(`${OPTION_CHAIN_URL}?${params}`, { headers: { Authorization: authHeader, version: '2.0' } });
+    const data = await res.json();
+    if (!res.ok || data.s !== 'ok') return null;
+    const chain = (data.data && Array.isArray(data.data.optionsChain)) ? data.data.optionsChain
+      : (Array.isArray(data.d) ? data.d : null);
+    if (!chain) return null;
+    const withIv = chain.find((row) => typeof row.iv === 'number');
+    return withIv ? withIv.iv : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function screenBatch(entries, authHeader) {
+  // entries: [[symbol, spotSymbol], ...]
+  const results = [];
+
+  for (let i = 0; i < entries.length; i += FETCH_CONCURRENCY) {
+    const chunk = entries.slice(i, i + FETCH_CONCURRENCY);
+    const histories = await Promise.all(
+      chunk.map(([, spotSymbol]) => fetchHistory(spotSymbol, authHeader).catch(() => null))
+    );
+    chunk.forEach(([symbol], idx) => {
+      const candles = histories[idx];
+      if (!candles) return;
+      const pct = sixMonthChangePct(candles);
+      const rank = volRank(candles);
+      if (pct === null || rank === null) return;
+      if (pct <= DOWN_THRESHOLD_PCT) {
+        results.push({ symbol, sixMonthChangePct: pct, volRank: rank, optionIv: null });
+      }
+    });
+    if (i + FETCH_CONCURRENCY < entries.length) await sleep(FETCH_SPACING_MS);
+  }
+
+  const entryBySymbol = new Map(entries);
+  for (let i = 0; i < results.length; i += FETCH_CONCURRENCY) {
+    const chunk = results.slice(i, i + FETCH_CONCURRENCY);
+    const ivs = await Promise.all(
+      chunk.map((r) => fetchOptionIv(entryBySymbol.get(r.symbol), authHeader))
+    );
+    chunk.forEach((r, idx) => { r.optionIv = ivs[idx]; });
+    if (i + FETCH_CONCURRENCY < results.length) await sleep(FETCH_SPACING_MS);
+  }
+
+  return results;
+}
+
+async function handler(req, res) {
+  const cookies = parseCookies(req);
+  const accessToken = cookies.fyers_session;
+  const appId = process.env.FYERS_APP_ID;
+
+  if (!accessToken || !appId) {
+    res.status(401).json({ error: 'not_logged_in' });
+    return;
+  }
+
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+  const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(req.query.limit, 10) || DEFAULT_LIMIT));
+  const cacheKey = `${offset}:${limit}`;
+  const cached = batchCache.get(cacheKey);
+  if (cached && Date.now() - cached.builtAt < CACHE_TTL_MS) {
+    res.status(200).json(cached.payload);
+    return;
+  }
+
+  try {
+    const instrumentMap = await getInstrumentMap();
+    const allSymbols = Object.keys(instrumentMap);
+    const batchSymbols = allSymbols.slice(offset, offset + limit);
+    const entries = batchSymbols.map((symbol) => [symbol, instrumentMap[symbol].spotSymbol]);
+
+    const authHeader = `${appId}:${accessToken}`;
+    const results = await screenBatch(entries, authHeader);
+
+    const nextOffset = offset + limit < allSymbols.length ? offset + limit : null;
+    const payload = { status: 'ok', results, nextOffset, total: allSymbols.length };
+    batchCache.set(cacheKey, { builtAt: Date.now(), payload });
+    res.status(200).json(payload);
+  } catch (err) {
+    res.status(502).json({ error: 'screener_fetch_failed', message: err.message });
+  }
+}
+
+module.exports = handler;
 module.exports.sixMonthChangePct = sixMonthChangePct;
 module.exports.volRank = volRank;

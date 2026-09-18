@@ -133,7 +133,7 @@
         <button type="button" class="search-clear" id="stockSearchClear" aria-label="Clear search" hidden>&times;</button>
       </div>
       <div class="grid-toolbar-right">
-        <a href="/api/jainam/login" class="connect-btn" id="connectBtn">Connect Broker</a>
+        <a href="/api/fyers/login" class="connect-btn" id="connectBtn">Connect Broker</a>
         <div class="clock">
           <span class="clock-tz">IST</span>
           <span class="clock-value" id="clockValue">—</span>
@@ -457,14 +457,14 @@
   var connectBtn = document.getElementById('connectBtn');
   function markBrokerConnected(){
     if (connectBtn.classList.contains('connected')) return;
-    connectBtn.setAttribute('href', '/api/jainam/logout');
+    connectBtn.setAttribute('href', '/api/fyers/logout');
     connectBtn.classList.add('connected');
     connectBtn.textContent = 'Disconnect';
   }
 
-  var QUOTE_POLL_MS = 4000;
+  var QUOTE_POLL_MS = 6000;
   function pollQuotes(){
-    fetch('/api/jainam/quotes')
+    fetch('/api/fyers/quotes')
       .then(function(res){
         if (res.status !== 401) markBrokerConnected();
         return res.json().then(function(body){ return { ok: res.ok, body: body }; });

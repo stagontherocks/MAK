@@ -461,6 +461,19 @@
     connectBtn.classList.add('connected');
     connectBtn.textContent = 'Disconnect';
   }
+  function markBrokerDisconnected(){
+    connectBtn.setAttribute('href', '/api/fyers/login');
+    connectBtn.classList.remove('connected');
+    connectBtn.textContent = 'Connect Broker';
+  }
+  connectBtn.addEventListener('click', function(e){
+    // Connect Broker still navigates normally (it's a real OAuth redirect).
+    // Disconnect logs out in the background instead of navigating, so the
+    // page never reloads and the last fetched grid values stay on screen.
+    if (!connectBtn.classList.contains('connected')) return;
+    e.preventDefault();
+    fetch('/api/fyers/logout').catch(function(){}).then(function(){ markBrokerDisconnected(); });
+  });
 
   var QUOTE_POLL_MS = 6000;
   function pollQuotes(){

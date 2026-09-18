@@ -125,6 +125,13 @@
   var statusEl = document.getElementById('screenerStatus');
   var tbody = document.getElementById('screenerBody');
 
+  // TEMPORARY DIAGNOSTICS -- remove alongside the block in fetchBatch below
+  // once the "0 matches" report is root-caused and confirmed fixed.
+  var diagHistoryOk = 0;
+  var diagHistoryFailed = 0;
+  var diagSampleErrors = [];
+  var diagSampleChanges = [];
+
   function renderRows(){
     var sorted = rows.slice().sort(function(a, b){ return b.volRank - a.volRank; });
     tbody.innerHTML = sorted.map(function(r){
@@ -155,12 +162,24 @@
         }
         rows = rows.concat(body.results);
         renderRows();
+        // TEMPORARY DIAGNOSTICS -- remove this block once the "0 matches"
+        // report is root-caused and confirmed fixed.
+        if (body.diagnostics) {
+          diagHistoryOk += body.diagnostics.historyOk;
+          diagHistoryFailed += body.diagnostics.historyFailed;
+          if (diagSampleErrors.length < 3) diagSampleErrors = diagSampleErrors.concat(body.diagnostics.sampleErrors).slice(0, 3);
+          if (diagSampleChanges.length < 5) diagSampleChanges = diagSampleChanges.concat(body.diagnostics.sampleChanges).slice(0, 5);
+        }
+        var diagText = ' [debug: history ok=' + diagHistoryOk + ' failed=' + diagHistoryFailed +
+          (diagSampleErrors.length ? ' | error sample: ' + diagSampleErrors[0] : '') +
+          (diagSampleChanges.length ? ' | change sample: ' + diagSampleChanges.map(function(s){ return s.symbol + '=' + (s.pct === null ? 'null' : s.pct.toFixed(1) + '%'); }).join(', ') : '') +
+          ']';
         var scanned = Math.min(offset + BATCH_LIMIT, body.total);
         if (body.nextOffset !== null) {
-          statusEl.textContent = 'Screening ' + scanned + '/' + body.total + '...';
+          statusEl.textContent = 'Screening ' + scanned + '/' + body.total + '...' + diagText;
           fetchBatch(body.nextOffset);
         } else {
-          statusEl.textContent = 'Done — ' + rows.length + ' match' + (rows.length === 1 ? '' : 'es') + ' found (of ' + body.total + ' F&O stocks screened).';
+          statusEl.textContent = 'Done — ' + rows.length + ' match' + (rows.length === 1 ? '' : 'es') + ' found (of ' + body.total + ' F&O stocks screened).' + diagText;
         }
       })
       .catch(function(){

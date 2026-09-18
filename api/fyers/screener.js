@@ -90,11 +90,13 @@ async function fetchHistory(spotSymbol, authHeader) {
   const from = now - HISTORY_RANGE_DAYS * 24 * 60 * 60;
   const params = new URLSearchParams({
     symbol: spotSymbol, resolution: 'D', date_format: '0',
-    range_from: String(from), range_to: String(now),
+    range_from: String(from), range_to: String(now), cont_flag: '1',
   });
   const res = await fetch(`${HISTORY_URL}?${params}`, { headers: { Authorization: authHeader, version: '2.0' } });
   const data = await res.json();
-  if (!res.ok || data.s !== 'ok' || !Array.isArray(data.candles)) return null;
+  if (!res.ok || data.s !== 'ok' || !Array.isArray(data.candles)) {
+    throw new Error(`history fetch failed for ${spotSymbol}: HTTP ${res.status} ${JSON.stringify(data)}`);
+  }
   return data.candles;
 }
 
@@ -120,17 +122,33 @@ async function fetchOptionIv(spotSymbol, authHeader) {
 async function screenBatch(entries, authHeader) {
   // entries: [[symbol, spotSymbol], ...]
   const results = [];
+  // TEMPORARY DIAGNOSTICS -- added to root-cause the "0 matches across all
+  // 212 stocks" report. Strip this block (and the `diagnostics` field on
+  // the response/return) once a live run confirms the real cause and fix.
+  const diagnostics = { historyOk: 0, historyFailed: 0, sampleErrors: [], sampleChanges: [] };
 
   for (let i = 0; i < entries.length; i += FETCH_CONCURRENCY) {
     const chunk = entries.slice(i, i + FETCH_CONCURRENCY);
     const histories = await Promise.all(
-      chunk.map(([, spotSymbol]) => fetchHistory(spotSymbol, authHeader).catch(() => null))
+      chunk.map(([, spotSymbol]) =>
+        fetchHistory(spotSymbol, authHeader)
+          .then((candles) => ({ candles, error: null }))
+          .catch((err) => ({ candles: null, error: err.message }))
+      )
     );
     chunk.forEach(([symbol], idx) => {
-      const candles = histories[idx];
-      if (!candles) return;
+      const { candles, error } = histories[idx];
+      if (error) {
+        diagnostics.historyFailed++;
+        if (diagnostics.sampleErrors.length < 3) diagnostics.sampleErrors.push(error);
+        return;
+      }
+      diagnostics.historyOk++;
       const pct = sixMonthChangePct(candles);
       const rank = volRank(candles);
+      if (diagnostics.sampleChanges.length < 5) {
+        diagnostics.sampleChanges.push({ symbol, pct, rank, candleCount: candles.length });
+      }
       if (pct === null || rank === null) return;
       if (pct <= DOWN_THRESHOLD_PCT) {
         results.push({ symbol, sixMonthChangePct: pct, volRank: rank, optionIv: null });
@@ -149,7 +167,7 @@ async function screenBatch(entries, authHeader) {
     if (i + FETCH_CONCURRENCY < results.length) await sleep(FETCH_SPACING_MS);
   }
 
-  return results;
+  return { results, diagnostics };
 }
 
 async function handler(req, res) {
@@ -178,10 +196,10 @@ async function handler(req, res) {
     const entries = batchSymbols.map((symbol) => [symbol, instrumentMap[symbol].spotSymbol]);
 
     const authHeader = `${appId}:${accessToken}`;
-    const results = await screenBatch(entries, authHeader);
+    const { results, diagnostics } = await screenBatch(entries, authHeader);
 
     const nextOffset = offset + limit < allSymbols.length ? offset + limit : null;
-    const payload = { status: 'ok', results, nextOffset, total: allSymbols.length };
+    const payload = { status: 'ok', results, nextOffset, total: allSymbols.length, diagnostics };
     batchCache.set(cacheKey, { builtAt: Date.now(), payload });
     res.status(200).json(payload);
   } catch (err) {

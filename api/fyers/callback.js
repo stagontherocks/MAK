@@ -1,13 +1,41 @@
 const crypto = require('crypto');
 
-// Fyers redirects the user's browser here after login, with auth_code in
-// the query string. We exchange it (plus our secret) for an access token,
-// then hand the browser back to trading.html via an httpOnly cookie.
+function parseCookies(req) {
+  if (req.cookies) return req.cookies;
+  const header = req.headers.cookie || '';
+  const out = {};
+  header.split(';').forEach((part) => {
+    const idx = part.indexOf('=');
+    if (idx === -1) return;
+    out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+  });
+  return out;
+}
+
+function safeEqual(a, b) {
+  const bufA = Buffer.from(a || '');
+  const bufB = Buffer.from(b || '');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+// Fyers redirects the user's browser here after login, with auth_code and
+// state in the query string. state must match the fyers_oauth_state cookie
+// login.js set -- this guards against login CSRF (a crafted link carrying
+// someone else's auth_code binding this session to their Fyers account).
+// We then exchange auth_code (plus our secret) for an access token, and
+// hand the browser back to trading.html via an httpOnly cookie.
 module.exports = async (req, res) => {
   const authCode = req.query.auth_code;
 
   if (!authCode) {
     res.status(400).send('Missing auth_code from Fyers redirect.');
+    return;
+  }
+
+  const cookies = parseCookies(req);
+  if (!safeEqual(req.query.state, cookies.fyers_oauth_state)) {
+    res.status(400).send('Invalid or missing OAuth state.');
     return;
   }
 
@@ -38,6 +66,7 @@ module.exports = async (req, res) => {
 
     res.setHeader('Set-Cookie', [
       `fyers_session=${data.access_token}; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=28800`,
+      'fyers_oauth_state=; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=0',
     ]);
 
     res.writeHead(302, { Location: '/trading.html' });

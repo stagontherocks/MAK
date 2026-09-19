@@ -89,7 +89,7 @@
           <thead>
             <tr>
               <th>Stock Name</th>
-              <th>6-Month Change</th>
+              <th>Decline From 6M High</th>
               <th>Realized Vol Rank</th>
               <th>Option IV</th>
             </tr>
@@ -120,7 +120,7 @@
     fetch('/api/fyers/logout').catch(function(){}).then(function(){ markBrokerDisconnected(); });
   });
 
-  var BATCH_LIMIT = 15;
+  var BATCH_LIMIT = 10;
   var rows = [];
   var statusEl = document.getElementById('screenerStatus');
   var tbody = document.getElementById('screenerBody');
@@ -137,7 +137,7 @@
     tbody.innerHTML = sorted.map(function(r){
       return '<tr>' +
         '<td>' + r.symbol + '</td>' +
-        '<td class="down">' + r.sixMonthChangePct.toFixed(1) + '%</td>' +
+        '<td class="down">' + r.declineFromHighPct.toFixed(1) + '%</td>' +
         '<td>' + r.volRank.toFixed(0) + '</td>' +
         '<td>' + (r.optionIv !== null && r.optionIv !== undefined ? r.optionIv.toFixed(1) : '—') + '</td>' +
         '</tr>';

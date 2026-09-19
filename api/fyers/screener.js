@@ -1,6 +1,6 @@
 // api/fyers/screener.js
-// High-IV screener: filters the 210 F&O stocks to ones down >=30% over the
-// past 6 months, ranked by realized-volatility percentile -- a proxy for
+// High-IV screener: filters the 210 F&O stocks to ones down >=30% from
+// their own 6-month high, ranked by realized-volatility percentile -- a proxy for
 // IV Rank, since true options IV Rank needs a year of accumulated daily IV
 // history this project has no way to build (no DB, no cron). See
 // docs/superpowers/specs/2026-09-18-hiv-stocks-screener-design.md.
@@ -10,22 +10,23 @@ const ANNUALIZATION_FACTOR = Math.sqrt(252);
 const SIX_MONTH_SECONDS = 182 * 24 * 60 * 60;
 
 // candles: [[unixTs, open, high, low, close, volume], ...] ascending by time.
-function sixMonthChangePct(candles) {
+// Decline from the stock's own 6-month high (the actual intraday high, not
+// just the highest close) to today's close -- not a two-point comparison
+// against the price from exactly 6 months ago.
+function declineFromSixMonthHighPct(candles) {
   if (!candles || candles.length < 2) return null;
   const latest = candles[candles.length - 1];
-  const targetTs = latest[0] - SIX_MONTH_SECONDS;
-
-  let closest = candles[0];
-  let closestDiff = Math.abs(candles[0][0] - targetTs);
-  for (const c of candles) {
-    const diff = Math.abs(c[0] - targetTs);
-    if (diff < closestDiff) { closest = c; closestDiff = diff; }
-  }
-
-  const baseClose = closest[4];
   const latestClose = latest[4];
-  if (!baseClose) return null;
-  return ((latestClose - baseClose) / baseClose) * 100;
+  const cutoffTs = latest[0] - SIX_MONTH_SECONDS;
+
+  let sixMonthHigh = null;
+  for (const c of candles) {
+    if (c[0] < cutoffTs) continue;
+    const high = c[2];
+    if (sixMonthHigh === null || high > sixMonthHigh) sixMonthHigh = high;
+  }
+  if (!sixMonthHigh) return null;
+  return ((latestClose - sixMonthHigh) / sixMonthHigh) * 100;
 }
 
 function stdev(values) {
@@ -60,12 +61,19 @@ const { getInstrumentMap } = require('./_contracts');
 const HISTORY_URL = 'https://api-t1.fyers.in/data/history';
 const OPTION_CHAIN_URL = 'https://api-t1.fyers.in/data/options-chain-v3';
 const HISTORY_RANGE_DAYS = 366;
-const FETCH_CONCURRENCY = 8;
-const FETCH_SPACING_MS = 1000;
+// Unlike quotes.js (which bursts ~17 requests once per 6s poll, then idles
+// -- low average rate), this endpoint's ~27 client-driven batches chain
+// back-to-back with no idle gaps, so these constants set the *sustained*
+// rate, not a burst rate. 5 concurrent / 2000ms = 150 req/min, safely under
+// Fyers' 200/min cap (with margin -- breaching it 3x/day blocks the
+// account for the rest of the day). Do not copy quotes.js's burst-tuned
+// constants here again.
+const FETCH_CONCURRENCY = 5;
+const FETCH_SPACING_MS = 2000;
 const DOWN_THRESHOLD_PCT = -30;
 const CACHE_TTL_MS = 20 * 60 * 60 * 1000;
-const DEFAULT_LIMIT = 15;
-const MAX_LIMIT = 50;
+const DEFAULT_LIMIT = 10;
+const MAX_LIMIT = 20; // kept small -- at 5 concurrent/2s pacing, a large limit risks a serverless-timeout on top of the rate-limit math above
 
 const batchCache = new Map(); // key: "offset:limit" -> { builtAt, payload }
 
@@ -144,14 +152,14 @@ async function screenBatch(entries, authHeader) {
         return;
       }
       diagnostics.historyOk++;
-      const pct = sixMonthChangePct(candles);
+      const pct = declineFromSixMonthHighPct(candles);
       const rank = volRank(candles);
       if (diagnostics.sampleChanges.length < 5) {
         diagnostics.sampleChanges.push({ symbol, pct, rank, candleCount: candles.length });
       }
       if (pct === null || rank === null) return;
       if (pct <= DOWN_THRESHOLD_PCT) {
-        results.push({ symbol, sixMonthChangePct: pct, volRank: rank, optionIv: null });
+        results.push({ symbol, declineFromHighPct: pct, volRank: rank, optionIv: null });
       }
     });
     if (i + FETCH_CONCURRENCY < entries.length) await sleep(FETCH_SPACING_MS);
@@ -208,5 +216,5 @@ async function handler(req, res) {
 }
 
 module.exports = handler;
-module.exports.sixMonthChangePct = sixMonthChangePct;
+module.exports.declineFromSixMonthHighPct = declineFromSixMonthHighPct;
 module.exports.volRank = volRank;

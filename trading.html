@@ -94,6 +94,10 @@
     color:#787878;padding:12px 16px;border-bottom:1px solid #262626;white-space:nowrap;
   }
   thead th:first-child{text-align:left}
+  thead th.sortable{cursor:pointer;user-select:none}
+  thead th.sortable:hover{color:#c2c2c2}
+  thead th.sort-asc::after{content:" \25B2"}
+  thead th.sort-desc::after{content:" \25BC"}
   tbody td{
     padding:12px 16px;font-size:13px;text-align:right;border-bottom:1px solid #1e1e1e;
     font-variant-numeric:tabular-nums;color:#eeeeee;white-space:nowrap;
@@ -154,8 +158,8 @@
               <th>Far Month</th>
               <th>1M (NM - CF)</th>
               <th>2M (FM - NM)</th>
-              <th>1M Profit</th>
-              <th>2M Profit</th>
+              <th class="sortable" id="thProfit1m">1M Profit</th>
+              <th class="sortable" id="thProfit2m">2M Profit</th>
             </tr>
           </thead>
           <tbody id="gridBody"></tbody>
@@ -463,6 +467,58 @@
     });
   }
 
+  // Sorting for the 1M/2M Profit columns. Values are derived on demand from
+  // lastPrices/lotBySymbol (the same values setCell just wrote into the
+  // cells) rather than cached separately, so a sort always reflects the
+  // latest poll. applySort() is called again after every applyQuotes() so
+  // an active sort stays correct as prices keep updating live.
+  var SORT_VALUE_GETTERS = {
+    profit1m: function(symbol){
+      var f = lastPrices[symbol] && lastPrices[symbol].futures;
+      if (!f || f[0] === undefined || f[1] === undefined) return null;
+      return (f[1] - f[0]) * (lotBySymbol[symbol] || 0);
+    },
+    profit2m: function(symbol){
+      var f = lastPrices[symbol] && lastPrices[symbol].futures;
+      if (!f || f[1] === undefined || f[2] === undefined) return null;
+      return (f[2] - f[1]) * (lotBySymbol[symbol] || 0);
+    }
+  };
+  var sortState = { column: null, direction: 'desc' };
+
+  function applySort(){
+    if (!sortState.column) return;
+    var getValue = SORT_VALUE_GETTERS[sortState.column];
+    var rowsArr = Array.prototype.slice.call(gridBody.querySelectorAll('tr'));
+    rowsArr.sort(function(a, b){
+      var av = getValue(a.getAttribute('data-symbol'));
+      var bv = getValue(b.getAttribute('data-symbol'));
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1; // rows without data yet always sink to the bottom
+      if (bv === null) return -1;
+      return sortState.direction === 'asc' ? av - bv : bv - av;
+    });
+    rowsArr.forEach(function(row){ gridBody.appendChild(row); });
+  }
+
+  function bindSortHeader(id, column){
+    var th = document.getElementById(id);
+    th.addEventListener('click', function(){
+      if (sortState.column === column) {
+        sortState.direction = sortState.direction === 'desc' ? 'asc' : 'desc';
+      } else {
+        sortState.column = column;
+        sortState.direction = 'desc';
+      }
+      document.getElementById('thProfit1m').classList.remove('sort-asc', 'sort-desc');
+      document.getElementById('thProfit2m').classList.remove('sort-asc', 'sort-desc');
+      th.classList.add(sortState.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+      applySort();
+    });
+  }
+  bindSortHeader('thProfit1m', 'profit1m');
+  bindSortHeader('thProfit2m', 'profit2m');
+
   var lastIndices = {};
   var tickerEls = { NIFTY: document.getElementById('tickerNifty'), BANKNIFTY: document.getElementById('tickerBanknifty'), VIX: document.getElementById('tickerVix') };
   function applyIndices(indices){
@@ -511,6 +567,7 @@
       .then(function(result){
         if (result.ok && result.body.quotes) applyQuotes(result.body.quotes);
         if (result.ok && result.body.indices) applyIndices(result.body.indices);
+        applySort();
       })
       .catch(function(){ /* keep last known values on transient network errors */ })
       .then(function(){ setTimeout(pollQuotes, QUOTE_POLL_MS); });

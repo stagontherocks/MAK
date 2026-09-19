@@ -67,6 +67,19 @@
   }
   .search-clear:hover{background:#3a3a3a;color:#ffffff}
   .search-clear[hidden]{display:none}
+  .grid-toolbar-left{display:flex;align-items:center;gap:16px}
+  .toolbar-divider{width:1px;height:24px;background:#262626;flex-shrink:0}
+  .segment-toggle{
+    display:flex;align-items:center;background:#1a1a1a;border:1px solid #262626;
+    border-radius:999px;padding:3px;gap:2px;flex-shrink:0;
+  }
+  .segment-btn{
+    border:none;background:transparent;color:#787878;font-size:12px;font-weight:700;
+    letter-spacing:.02em;padding:7px 16px;border-radius:999px;cursor:pointer;
+    font-family:inherit;transition:background .15s ease,color .15s ease;
+  }
+  .segment-btn:hover{color:#c2c2c2}
+  .segment-btn.active{background:#2ecc71;color:#0d1f14}
   .grid-toolbar-right{display:flex;align-items:center;gap:18px}
   .connect-btn{
     display:inline-flex;align-items:center;padding:9px 16px;border-radius:8px;
@@ -133,9 +146,16 @@
 <main>
   <div class="wrap">
     <div class="grid-toolbar">
-      <div class="search-wrap">
-        <input type="text" class="search-input" id="stockSearch" placeholder="Search stock..." aria-label="Search stocks">
-        <button type="button" class="search-clear" id="stockSearchClear" aria-label="Clear search" hidden>&times;</button>
+      <div class="grid-toolbar-left">
+        <div class="search-wrap">
+          <input type="text" class="search-input" id="stockSearch" placeholder="Search stock..." aria-label="Search stocks">
+          <button type="button" class="search-clear" id="stockSearchClear" aria-label="Clear search" hidden>&times;</button>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="segment-toggle" id="segmentToggle">
+          <button type="button" class="segment-btn active" data-segment="fno">F&amp;O</button>
+          <button type="button" class="segment-btn" data-segment="mcx">MCX</button>
+        </div>
       </div>
       <div class="nav-tickers">
         <span class="ticker"><span class="ticker-label">Nifty:</span><span class="ticker-value" id="tickerNifty">—</span></span>
@@ -386,12 +406,19 @@
   // Lot sizes from Fyers' live NSE_FO symbol master (idx futures, not equities,
   // so they don't live in fo-stocks.json alongside the 210 stocks).
   var INDEX_ROWS = [["NIFTY", 65], ["BANKNIFTY", 30]];
+  // MCX lot sizes (contract unit, not currency) -- update here if the
+  // exchange revises them; there's no local JSON source for these like
+  // fo-stocks.json is for equities.
+  var MCX_ROWS = [["CRUDEOIL", 100], ["NATURALGAS", 1250]];
 
   var gridBody = document.getElementById('gridBody');
   var lastPrices = {};
   var lotBySymbol = {};
 
+  var originalOrder = [];
+
   function renderRows(stocks){
+    originalOrder = stocks.map(function(stock){ return stock[0]; });
     var rowsHtml = stocks.map(function(stock){
       var symbol = stock[0], lot = stock[1];
       lotBySymbol[symbol] = lot;
@@ -486,8 +513,15 @@
   };
   var sortState = { column: null, direction: 'desc' };
 
+  function restoreOriginalOrder(){
+    originalOrder.forEach(function(symbol){
+      var row = gridBody.querySelector('tr[data-symbol="' + symbol + '"]');
+      if (row) gridBody.appendChild(row);
+    });
+  }
+
   function applySort(){
-    if (!sortState.column) return;
+    if (!sortState.column) { restoreOriginalOrder(); return; }
     var getValue = SORT_VALUE_GETTERS[sortState.column];
     var rowsArr = Array.prototype.slice.call(gridBody.querySelectorAll('tr'));
     rowsArr.sort(function(a, b){
@@ -501,18 +535,24 @@
     rowsArr.forEach(function(row){ gridBody.appendChild(row); });
   }
 
+  // 3-state cycle per column: desc -> asc -> back to original (unsorted) order.
   function bindSortHeader(id, column){
     var th = document.getElementById(id);
     th.addEventListener('click', function(){
       if (sortState.column === column) {
-        sortState.direction = sortState.direction === 'desc' ? 'asc' : 'desc';
+        if (sortState.direction === 'desc') {
+          sortState.direction = 'asc';
+        } else {
+          sortState.column = null;
+          sortState.direction = 'desc';
+        }
       } else {
         sortState.column = column;
         sortState.direction = 'desc';
       }
       document.getElementById('thProfit1m').classList.remove('sort-asc', 'sort-desc');
       document.getElementById('thProfit2m').classList.remove('sort-asc', 'sort-desc');
-      th.classList.add(sortState.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+      if (sortState.column) th.classList.add(sortState.direction === 'asc' ? 'sort-asc' : 'sort-desc');
       applySort();
     });
   }
@@ -558,20 +598,61 @@
   });
 
   var QUOTE_POLL_MS = 6000;
+  var currentSegment = 'fno'; // 'fno' | 'mcx'
+  var pollTimer = null;
+
   function pollQuotes(){
-    fetch('/api/fyers/quotes')
+    var endpoint = currentSegment === 'mcx' ? '/api/fyers/mcx-quotes' : '/api/fyers/quotes';
+    fetch(endpoint)
       .then(function(res){
         if (res.status !== 401) markBrokerConnected();
         return res.json().then(function(body){ return { ok: res.ok, body: body }; });
       })
       .then(function(result){
-        if (result.ok && result.body.quotes) applyQuotes(result.body.quotes);
+        if (result.ok && result.body.quotes) {
+          if (currentSegment === 'mcx') {
+            // MCX futures have no separate spot instrument -- the front
+            // (nearest-expiry) future stands in for LTP, same value shown
+            // in the Current Future Price column.
+            Object.keys(result.body.quotes).forEach(function(symbol){
+              var q = result.body.quotes[symbol];
+              q.ltp = (q.futures && q.futures[0] !== null && q.futures[0] !== undefined) ? q.futures[0] : undefined;
+            });
+          }
+          applyQuotes(result.body.quotes);
+        }
         if (result.ok && result.body.indices) applyIndices(result.body.indices);
         applySort();
       })
       .catch(function(){ /* keep last known values on transient network errors */ })
-      .then(function(){ setTimeout(pollQuotes, QUOTE_POLL_MS); });
+      .then(function(){ pollTimer = setTimeout(pollQuotes, QUOTE_POLL_MS); });
   }
+
+  var FNO_STOCKS_RESOLVED = [];
+  var segmentToggle = document.getElementById('segmentToggle');
+
+  function switchSegment(segment){
+    if (segment === currentSegment) return;
+    currentSegment = segment;
+    lastPrices = {};
+    sortState = { column: null, direction: 'desc' };
+    document.getElementById('thProfit1m').classList.remove('sort-asc', 'sort-desc');
+    document.getElementById('thProfit2m').classList.remove('sort-asc', 'sort-desc');
+    var buttons = segmentToggle.querySelectorAll('.segment-btn');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].classList.toggle('active', buttons[i].getAttribute('data-segment') === segment);
+    }
+    renderRows(segment === 'mcx' ? MCX_ROWS : INDEX_ROWS.concat(FNO_STOCKS_RESOLVED));
+    applySearchFilter();
+    if (pollTimer) clearTimeout(pollTimer);
+    pollQuotes();
+  }
+
+  segmentToggle.addEventListener('click', function(e){
+    var btn = e.target.closest('.segment-btn');
+    if (!btn) return;
+    switchSegment(btn.getAttribute('data-segment'));
+  });
 
   var searchInput = document.getElementById('stockSearch');
   var searchClear = document.getElementById('stockSearchClear');
@@ -597,6 +678,7 @@
     .then(function(res){ return res.json(); })
     .catch(function(){ return FO_STOCKS_FALLBACK; })
     .then(function(stocks){
+      FNO_STOCKS_RESOLVED = stocks;
       renderRows(INDEX_ROWS.concat(stocks));
       pollQuotes();
     });

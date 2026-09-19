@@ -116,12 +116,12 @@
       <a href="#" class="up">Up 15%</a>
       <a href="hiv-stocks.html">High IV</a>
     </nav>
-    <div class="nav-tickers">
-      <span class="ticker"><span class="ticker-label">Nifty:</span><span class="ticker-value" id="tickerNifty">—</span></span>
-      <span class="ticker-divider"></span>
-      <span class="ticker"><span class="ticker-label">Banknifty:</span><span class="ticker-value" id="tickerBanknifty">—</span></span>
-      <span class="ticker-divider"></span>
-      <span class="ticker"><span class="ticker-label">VIX:</span><span class="ticker-value" id="tickerVix">—</span></span>
+    <div class="grid-toolbar-right">
+      <div class="clock">
+        <span class="clock-tz">IST</span>
+        <span class="clock-value" id="clockValue">—</span>
+      </div>
+      <a href="/api/fyers/login" class="connect-btn" id="connectBtn">Connect Broker</a>
     </div>
   </div>
 </header>
@@ -133,12 +133,12 @@
         <input type="text" class="search-input" id="stockSearch" placeholder="Search stock..." aria-label="Search stocks">
         <button type="button" class="search-clear" id="stockSearchClear" aria-label="Clear search" hidden>&times;</button>
       </div>
-      <div class="grid-toolbar-right">
-        <a href="/api/fyers/login" class="connect-btn" id="connectBtn">Connect Broker</a>
-        <div class="clock">
-          <span class="clock-tz">IST</span>
-          <span class="clock-value" id="clockValue">—</span>
-        </div>
+      <div class="nav-tickers">
+        <span class="ticker"><span class="ticker-label">Nifty:</span><span class="ticker-value" id="tickerNifty">—</span></span>
+        <span class="ticker-divider"></span>
+        <span class="ticker"><span class="ticker-label">Banknifty:</span><span class="ticker-value" id="tickerBanknifty">—</span></span>
+        <span class="ticker-divider"></span>
+        <span class="ticker"><span class="ticker-label">VIX:</span><span class="ticker-value" id="tickerVix">—</span></span>
       </div>
     </div>
     <div class="grid-card">

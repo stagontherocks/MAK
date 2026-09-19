@@ -42,7 +42,15 @@
   .connect-btn.connected:hover{background:rgba(255,77,79,.12)}
 
   main{padding:32px 0 64px}
-  .screener-status{font-size:13px;font-weight:600;color:#787878;margin-bottom:16px}
+  .screener-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+  .screener-status{font-size:13px;font-weight:600;color:#787878}
+  .refresh-btn{
+    flex-shrink:0;display:inline-flex;align-items:center;padding:8px 14px;border-radius:8px;
+    background:#1c1c1c;border:1px solid #262626;color:#eeeeee;font-size:13px;font-weight:600;
+    cursor:pointer;transition:background .15s ease;
+  }
+  .refresh-btn:hover{background:#262626}
+  .refresh-btn:disabled{opacity:.5;cursor:not-allowed}
 
   .grid-card{
     background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
@@ -82,7 +90,10 @@
 
 <main>
   <div class="wrap">
-    <div class="screener-status" id="screenerStatus">Starting screen...</div>
+    <div class="screener-toolbar">
+      <div class="screener-status" id="screenerStatus">Starting screen...</div>
+      <button type="button" class="refresh-btn" id="refreshBtn">Refresh</button>
+    </div>
     <div class="grid-card">
       <div class="grid-scroll">
         <table>
@@ -123,13 +134,43 @@
   connectBtn.addEventListener('click', function(e){
     if (!connectBtn.classList.contains('connected')) return;
     e.preventDefault();
-    fetch('/api/fyers/logout').catch(function(){}).then(function(){ markBrokerDisconnected(); });
+    fetch('/api/fyers/logout').catch(function(){}).then(function(){
+      markBrokerDisconnected();
+      // A disconnect invalidates any cached scan -- reconnecting starts fresh.
+      clearCache();
+      rows = [];
+      renderRows();
+      statusEl.textContent = 'Disconnected. Click Refresh once reconnected to run the screener.';
+    });
   });
 
   var BATCH_LIMIT = 10;
+  var CACHE_KEY = 'hivScreenerCache_v1';
   var rows = [];
+  var isScanning = false;
   var statusEl = document.getElementById('screenerStatus');
   var tbody = document.getElementById('screenerBody');
+  var refreshBtn = document.getElementById('refreshBtn');
+
+  // Cache is written only once a scan completes successfully (see fetchBatch's
+  // "Done" branch), so its mere presence means "a full completed run" -- no
+  // separate completion flag needed. Kept in localStorage (per-browser, not
+  // synced anywhere) purely so navigating back to this page doesn't re-run
+  // the ~212-symbol screen every time.
+  function loadCache(){
+    try {
+      var raw = localStorage.getItem(CACHE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) { return null; }
+  }
+  function saveCache(){
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ rows: rows, statusText: statusEl.textContent }));
+    } catch (err) { /* storage unavailable/full -- keep working without persistence */ }
+  }
+  function clearCache(){
+    try { localStorage.removeItem(CACHE_KEY); } catch (err) {}
+  }
 
   function renderRows(){
     var sorted = rows.slice().sort(function(a, b){ return b.volRank - a.volRank; });
@@ -154,9 +195,11 @@
         return res.json();
       })
       .then(function(body){
-        if (!body) return;
+        if (!body) { isScanning = false; refreshBtn.disabled = false; return; }
         if (body.status !== 'ok') {
           statusEl.textContent = 'Screener failed: ' + (body.message || body.error || 'unknown error');
+          isScanning = false;
+          refreshBtn.disabled = false;
           return;
         }
         rows = rows.concat(body.results);
@@ -167,6 +210,9 @@
           fetchBatch(body.nextOffset);
         } else {
           statusEl.textContent = 'Done — ' + rows.length + ' match' + (rows.length === 1 ? '' : 'es') + ' found (of ' + body.total + ' F&O stocks screened).';
+          isScanning = false;
+          refreshBtn.disabled = false;
+          saveCache();
         }
       })
       .catch(function(){
@@ -175,7 +221,33 @@
       });
   }
 
-  fetchBatch(0);
+  function startScan(){
+    if (isScanning) return;
+    isScanning = true;
+    refreshBtn.disabled = true;
+    rows = [];
+    renderRows();
+    statusEl.textContent = 'Starting screen...';
+    fetchBatch(0);
+  }
+
+  refreshBtn.addEventListener('click', function(){
+    clearCache();
+    startScan();
+  });
+
+  // Don't re-run the ~212-symbol screen on every visit: if a completed scan
+  // is cached, show it immediately and wait for an explicit Refresh click
+  // (or a disconnect/reconnect, which clears the cache -- see the connectBtn
+  // handler above). Only auto-run when there's nothing cached yet.
+  var cached = loadCache();
+  if (cached) {
+    rows = cached.rows || [];
+    renderRows();
+    statusEl.textContent = (cached.statusText || 'Loaded cached results.') + ' Click Refresh to rescan.';
+  } else {
+    startScan();
+  }
 </script>
 </body>
 </html>

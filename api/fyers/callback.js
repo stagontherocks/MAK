@@ -19,12 +19,15 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
+const RETURN_PATH_RE = /^\/[a-zA-Z0-9_-]+\.html$/;
+
 // Fyers redirects the user's browser here after login, with auth_code and
 // state in the query string. state must match the fyers_oauth_state cookie
 // login.js set -- this guards against login CSRF (a crafted link carrying
 // someone else's auth_code binding this session to their Fyers account).
 // We then exchange auth_code (plus our secret) for an access token, and
-// hand the browser back to trading.html via an httpOnly cookie.
+// hand the browser back to whichever page Connect Broker was clicked from
+// (login.js recorded it) via an httpOnly cookie.
 module.exports = async (req, res) => {
   const authCode = req.query.auth_code;
 
@@ -64,12 +67,17 @@ module.exports = async (req, res) => {
       return;
     }
 
+    let returnPath = '/trading.html';
+    const storedReturn = cookies.fyers_oauth_return ? decodeURIComponent(cookies.fyers_oauth_return) : '';
+    if (RETURN_PATH_RE.test(storedReturn)) returnPath = storedReturn;
+
     res.setHeader('Set-Cookie', [
       `fyers_session=${data.access_token}; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=28800`,
       'fyers_oauth_state=; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=0',
+      'fyers_oauth_return=; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=0',
     ]);
 
-    res.writeHead(302, { Location: '/trading.html' });
+    res.writeHead(302, { Location: returnPath });
     res.end();
   } catch (err) {
     res.status(500).send('Error during Fyers login exchange: ' + err.message);

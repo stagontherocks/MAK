@@ -471,6 +471,12 @@
     connectBtn.classList.remove('connected');
     connectBtn.textContent = 'Connect Broker';
   }
+  // Reflect the (already-shared, cookie-based) login state immediately on
+  // load, instead of waiting on the slower quotes polling to discover it
+  // indirectly via a non-401 response.
+  fetch('/api/fyers/status').then(function(res){ return res.json(); }).then(function(body){
+    if (body && body.loggedIn) markBrokerConnected();
+  }).catch(function(){});
   connectBtn.addEventListener('click', function(e){
     // Connect Broker still navigates normally (it's a real OAuth redirect).
     // Disconnect logs out in the background instead of navigating, so the

@@ -152,9 +152,10 @@
               <th>Current Future Price</th>
               <th>Near Month</th>
               <th>Far Month</th>
-              <th>Diff (Fut − LTP)</th>
-              <th>Diff (Near − LTP)</th>
-              <th>Diff (Far − LTP)</th>
+              <th>1M (NM - CF)</th>
+              <th>2M (FM - NM)</th>
+              <th>1M Profit</th>
+              <th>2M Profit</th>
             </tr>
           </thead>
           <tbody id="gridBody"></tbody>
@@ -384,10 +385,12 @@
 
   var gridBody = document.getElementById('gridBody');
   var lastPrices = {};
+  var lotBySymbol = {};
 
   function renderRows(stocks){
     var rowsHtml = stocks.map(function(stock){
       var symbol = stock[0], lot = stock[1];
+      lotBySymbol[symbol] = lot;
       return '<tr data-symbol="' + symbol + '">' +
         '<td>' + symbol + '</td>' +
         '<td class="price-pending c-ltp">—</td>' +
@@ -395,9 +398,10 @@
         '<td class="price-pending c-fut0">—</td>' +
         '<td class="price-pending c-fut1">—</td>' +
         '<td class="price-pending c-fut2">—</td>' +
-        '<td class="price-pending c-diff0">—</td>' +
-        '<td class="price-pending c-diff1">—</td>' +
-        '<td class="price-pending c-diff2">—</td>' +
+        '<td class="price-pending c-spread1m">—</td>' +
+        '<td class="price-pending c-spread2m">—</td>' +
+        '<td class="price-pending c-profit1m">—</td>' +
+        '<td class="price-pending c-profit2m">—</td>' +
         '</tr>';
     }).join('');
     gridBody.innerHTML = rowsHtml;
@@ -429,20 +433,31 @@
       }
 
       var futClasses = ['.c-fut0', '.c-fut1', '.c-fut2'];
-      var diffClasses = ['.c-diff0', '.c-diff1', '.c-diff2'];
       next.futures = [];
       q.futures.forEach(function(price, i){
         next.futures[i] = (price !== null && price !== undefined) ? price : (prev.futures && prev.futures[i]);
         if (price !== null && price !== undefined) {
           setCell(row.querySelector(futClasses[i]), price, prev.futures && prev.futures[i]);
         }
-        if (next.futures[i] !== undefined && next.ltp !== undefined) {
-          var diff = next.futures[i] - next.ltp;
-          var prevDiff = (prev.futures && prev.futures[i] !== undefined && prev.ltp !== undefined)
-            ? prev.futures[i] - prev.ltp : undefined;
-          setCell(row.querySelector(diffClasses[i]), diff, prevDiff);
-        }
       });
+
+      // 1M = Near Month vs Current (front) Future spread; 2M = Far Month vs
+      // Near Month spread. Profit is that spread's rupee value for one lot.
+      var lot = lotBySymbol[symbol] || 0;
+      if (next.futures[0] !== undefined && next.futures[1] !== undefined) {
+        var spread1m = next.futures[1] - next.futures[0];
+        var prevSpread1m = (prev.futures && prev.futures[0] !== undefined && prev.futures[1] !== undefined)
+          ? prev.futures[1] - prev.futures[0] : undefined;
+        setCell(row.querySelector('.c-spread1m'), spread1m, prevSpread1m);
+        setCell(row.querySelector('.c-profit1m'), spread1m * lot, prevSpread1m !== undefined ? prevSpread1m * lot : undefined);
+      }
+      if (next.futures[1] !== undefined && next.futures[2] !== undefined) {
+        var spread2m = next.futures[2] - next.futures[1];
+        var prevSpread2m = (prev.futures && prev.futures[1] !== undefined && prev.futures[2] !== undefined)
+          ? prev.futures[2] - prev.futures[1] : undefined;
+        setCell(row.querySelector('.c-spread2m'), spread2m, prevSpread2m);
+        setCell(row.querySelector('.c-profit2m'), spread2m * lot, prevSpread2m !== undefined ? prevSpread2m * lot : undefined);
+      }
 
       lastPrices[symbol] = next;
     });

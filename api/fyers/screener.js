@@ -130,33 +130,17 @@ async function fetchOptionIv(spotSymbol, authHeader) {
 async function screenBatch(entries, authHeader) {
   // entries: [[symbol, spotSymbol], ...]
   const results = [];
-  // TEMPORARY DIAGNOSTICS -- added to root-cause the "0 matches across all
-  // 212 stocks" report. Strip this block (and the `diagnostics` field on
-  // the response/return) once a live run confirms the real cause and fix.
-  const diagnostics = { historyOk: 0, historyFailed: 0, sampleErrors: [], sampleChanges: [] };
 
   for (let i = 0; i < entries.length; i += FETCH_CONCURRENCY) {
     const chunk = entries.slice(i, i + FETCH_CONCURRENCY);
     const histories = await Promise.all(
-      chunk.map(([, spotSymbol]) =>
-        fetchHistory(spotSymbol, authHeader)
-          .then((candles) => ({ candles, error: null }))
-          .catch((err) => ({ candles: null, error: err.message }))
-      )
+      chunk.map(([, spotSymbol]) => fetchHistory(spotSymbol, authHeader).catch(() => null))
     );
     chunk.forEach(([symbol], idx) => {
-      const { candles, error } = histories[idx];
-      if (error) {
-        diagnostics.historyFailed++;
-        if (diagnostics.sampleErrors.length < 3) diagnostics.sampleErrors.push(error);
-        return;
-      }
-      diagnostics.historyOk++;
+      const candles = histories[idx];
+      if (!candles) return;
       const pct = declineFromSixMonthHighPct(candles);
       const rank = volRank(candles);
-      if (diagnostics.sampleChanges.length < 5) {
-        diagnostics.sampleChanges.push({ symbol, pct, rank, candleCount: candles.length });
-      }
       if (pct === null || rank === null) return;
       if (pct <= DOWN_THRESHOLD_PCT) {
         results.push({ symbol, declineFromHighPct: pct, volRank: rank, optionIv: null });
@@ -175,7 +159,7 @@ async function screenBatch(entries, authHeader) {
     if (i + FETCH_CONCURRENCY < results.length) await sleep(FETCH_SPACING_MS);
   }
 
-  return { results, diagnostics };
+  return results;
 }
 
 async function handler(req, res) {
@@ -204,10 +188,10 @@ async function handler(req, res) {
     const entries = batchSymbols.map((symbol) => [symbol, instrumentMap[symbol].spotSymbol]);
 
     const authHeader = `${appId}:${accessToken}`;
-    const { results, diagnostics } = await screenBatch(entries, authHeader);
+    const results = await screenBatch(entries, authHeader);
 
     const nextOffset = offset + limit < allSymbols.length ? offset + limit : null;
-    const payload = { status: 'ok', results, nextOffset, total: allSymbols.length, diagnostics };
+    const payload = { status: 'ok', results, nextOffset, total: allSymbols.length };
     batchCache.set(cacheKey, { builtAt: Date.now(), payload });
     res.status(200).json(payload);
   } catch (err) {

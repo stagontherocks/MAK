@@ -8,7 +8,7 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 let cache = { builtAt: 0, map: null };
 
 const COL = { SYMBOL: 9, SHORT_NAME: 13, OPTION_TYPE: 16, EXPIRY_TS: 8 };
-const MCX_SYMBOLS = ['CRUDEOIL', 'NATURALGAS'];
+const MCX_SYMBOLS = ['CRUDEOIL', 'NATURALGAS', 'GOLDM', 'SILVERM'];
 
 function parseCsv(text) {
   return text.split(/\r?\n/).filter(Boolean).map((line) => line.split(','));

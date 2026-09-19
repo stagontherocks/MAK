@@ -408,8 +408,9 @@
   var INDEX_ROWS = [["NIFTY", 65], ["BANKNIFTY", 30]];
   // MCX lot sizes (contract unit, not currency) -- update here if the
   // exchange revises them; there's no local JSON source for these like
-  // fo-stocks.json is for equities.
-  var MCX_ROWS = [["CRUDEOIL", 100], ["NATURALGAS", 1250]];
+  // fo-stocks.json is for equities. GOLDM/SILVERM are the Mini contracts,
+  // not the full-size GOLD/SILVER ones.
+  var MCX_ROWS = [["CRUDEOIL", 100], ["NATURALGAS", 1250], ["GOLDM", 10], ["SILVERM", 5]];
 
   var gridBody = document.getElementById('gridBody');
   var lastPrices = {};

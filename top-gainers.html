@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>High IV Stocks — GrabMyStone</title>
+<title>Top Gainers — GrabMyStone</title>
 <link rel="icon" href="images/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,7 +46,30 @@
   .connect-btn.connected:hover{background:rgba(255,77,79,.12)}
 
   main{padding:32px 0 64px}
-  .screener-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+
+  .grid-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+  .search-wrap{position:relative;width:220px}
+  .search-input{
+    background:#161616 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23787878" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') no-repeat 14px center/14px;
+    border:1px solid #262626;color:#eeeeee;
+    font-family:inherit;font-size:13px;font-weight:600;
+    padding:9px 34px 9px 38px;border-radius:8px;
+    width:100%;
+  }
+  .search-input::placeholder{color:#787878;font-weight:500}
+  .search-input:hover{border-color:#3a3a3a}
+  .search-input:focus{outline:none;border-color:#4a4a4a}
+  .search-clear{
+    position:absolute;top:50%;right:8px;transform:translateY(-50%);
+    width:20px;height:20px;border:none;border-radius:999px;
+    background:#262626;color:#c2c2c2;font-size:15px;line-height:1;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    font-family:inherit;padding:0;
+  }
+  .search-clear:hover{background:#3a3a3a;color:#ffffff}
+  .search-clear[hidden]{display:none}
+
+  .toolbar-right{display:flex;align-items:center;gap:16px}
   .screener-status{font-size:13px;font-weight:600;color:#787878}
   .refresh-btn{
     flex-shrink:0;display:inline-flex;align-items:center;padding:8px 14px;border-radius:8px;
@@ -60,7 +83,7 @@
     background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
   }
   .grid-scroll{overflow:auto;max-height:calc(100vh - 220px)}
-  table{width:100%;border-collapse:collapse;min-width:640px}
+  table{width:100%;border-collapse:collapse;min-width:720px}
   thead th{
     position:sticky;top:0;z-index:1;
     background:#1a1a1a;
@@ -68,6 +91,10 @@
     color:#787878;padding:12px 16px;border-bottom:1px solid #262626;white-space:nowrap;
   }
   thead th:first-child{text-align:left}
+  thead th.sortable{cursor:pointer;user-select:none}
+  thead th.sortable:hover{color:#c2c2c2}
+  thead th.sort-asc::after{content:" \25B2"}
+  thead th.sort-desc::after{content:" \25BC"}
   tbody td{
     padding:12px 16px;font-size:13px;text-align:right;border-bottom:1px solid #1e1e1e;
     font-variant-numeric:tabular-nums;color:#eeeeee;white-space:nowrap;
@@ -75,7 +102,8 @@
   tbody td:first-child{text-align:left;font-weight:700}
   tbody tr:last-child td{border-bottom:none}
   tbody tr:hover td{background:#1c1c1c}
-  td.down{color:#ff4d4f}
+  .price-up{color:#2ecc71}
+  .price-down{color:#ff4d4f}
 </style>
 </head>
 <body>
@@ -85,8 +113,8 @@
     <nav class="nav-links">
       <a href="trading.html">Arbitrage</a>
       <a href="#" class="down">Top Losers</a>
-      <a href="top-gainers.html">Top Gainers</a>
-      <a href="hiv-stocks.html" class="active">High IV</a>
+      <a href="top-gainers.html" class="up active">Top Gainers</a>
+      <a href="hiv-stocks.html">High IV</a>
       <a href="#">Watchlist</a>
       <a href="#">Positions</a>
     </nav>
@@ -96,9 +124,15 @@
 
 <main>
   <div class="wrap">
-    <div class="screener-toolbar">
-      <div class="screener-status" id="screenerStatus">Starting screen...</div>
-      <button type="button" class="refresh-btn" id="refreshBtn">Refresh</button>
+    <div class="grid-toolbar">
+      <div class="search-wrap">
+        <input type="text" class="search-input" id="stockSearch" placeholder="Search stock..." aria-label="Search stocks">
+        <button type="button" class="search-clear" id="stockSearchClear" aria-label="Clear search" hidden>&times;</button>
+      </div>
+      <div class="toolbar-right">
+        <div class="screener-status" id="screenerStatus">Starting scan...</div>
+        <button type="button" class="refresh-btn" id="refreshBtn">Refresh</button>
+      </div>
     </div>
     <div class="grid-card">
       <div class="grid-scroll">
@@ -106,12 +140,15 @@
           <thead>
             <tr>
               <th>Stock Name</th>
-              <th>Decline From 6M High</th>
-              <th>Realized Vol Rank</th>
-              <th>Option IV</th>
+              <th class="sortable" id="thLtp">LTP</th>
+              <th class="sortable" id="thD1">% Chg</th>
+              <th>Lot Size</th>
+              <th class="sortable" id="thM1">1M</th>
+              <th class="sortable" id="thM3">3M</th>
+              <th class="sortable" id="thM6">6M</th>
             </tr>
           </thead>
-          <tbody id="screenerBody"></tbody>
+          <tbody id="gridBody"></tbody>
         </table>
       </div>
     </div>
@@ -131,9 +168,6 @@
     connectBtn.classList.remove('connected');
     connectBtn.textContent = 'Connect Broker';
   }
-  // Reflect the (already-shared, cookie-based) login state immediately on
-  // load, instead of waiting on the slower screener polling to discover it
-  // indirectly via a non-401 response.
   fetch('/api/fyers/status').then(function(res){ return res.json(); }).then(function(body){
     if (body && body.loggedIn) markBrokerConnected();
   }).catch(function(){});
@@ -142,27 +176,21 @@
     e.preventDefault();
     fetch('/api/fyers/logout').catch(function(){}).then(function(){
       markBrokerDisconnected();
-      // A disconnect invalidates any cached scan -- reconnecting starts fresh.
       clearCache();
       rows = [];
       renderRows();
-      statusEl.textContent = 'Disconnected. Click Refresh once reconnected to run the screener.';
+      statusEl.textContent = 'Disconnected. Click Refresh once reconnected to run the scan.';
     });
   });
 
   var BATCH_LIMIT = 10;
-  var CACHE_KEY = 'hivScreenerCache_v1';
+  var CACHE_KEY = 'topGainersCache_v1';
   var rows = [];
   var isScanning = false;
   var statusEl = document.getElementById('screenerStatus');
-  var tbody = document.getElementById('screenerBody');
+  var gridBody = document.getElementById('gridBody');
   var refreshBtn = document.getElementById('refreshBtn');
 
-  // Cache is written only once a scan completes successfully (see fetchBatch's
-  // "Done" branch), so its mere presence means "a full completed run" -- no
-  // separate completion flag needed. Kept in localStorage (per-browser, not
-  // synced anywhere) purely so navigating back to this page doesn't re-run
-  // the ~212-symbol screen every time.
   function loadCache(){
     try {
       var raw = localStorage.getItem(CACHE_KEY);
@@ -178,23 +206,99 @@
     try { localStorage.removeItem(CACHE_KEY); } catch (err) {}
   }
 
+  function fmtPct(value){
+    if (value === null || value === undefined) return '—';
+    return (value > 0 ? '+' : '') + value.toFixed(2) + '%';
+  }
+  function pctClass(value){
+    if (value === null || value === undefined) return '';
+    return value > 0 ? 'price-up' : (value < 0 ? 'price-down' : '');
+  }
+
+  // Single-column sort, 3-state cycle (desc -> asc -> unsorted), same model
+  // as trading.html's profit-column sort. Defaults to % Chg (1 day)
+  // descending on load since this is a Top Gainers screen.
+  var SORT_VALUE_GETTERS = {
+    ltp: function(r){ return r.ltp; },
+    d1: function(r){ return r.d1; },
+    m1: function(r){ return r.m1; },
+    m3: function(r){ return r.m3; },
+    m6: function(r){ return r.m6; }
+  };
+  var sortState = { column: 'd1', direction: 'desc' };
+  var sortHeaderIds = ['thLtp', 'thD1', 'thM1', 'thM3', 'thM6'];
+
+  function sortedRows(){
+    var getValue = SORT_VALUE_GETTERS[sortState.column];
+    if (!getValue) return rows.slice();
+    return rows.slice().sort(function(a, b){
+      var av = getValue(a), bv = getValue(b);
+      if (av === null || av === undefined) return 1;
+      if (bv === null || bv === undefined) return -1;
+      return sortState.direction === 'asc' ? av - bv : bv - av;
+    });
+  }
+
   function renderRows(){
-    var sorted = rows.slice().sort(function(a, b){ return b.volRank - a.volRank; });
-    tbody.innerHTML = sorted.map(function(r){
+    var term = searchInput.value.trim().toUpperCase();
+    var visible = sortedRows().filter(function(r){ return r.symbol.indexOf(term) !== -1; });
+    gridBody.innerHTML = visible.map(function(r){
       return '<tr>' +
         '<td>' + r.symbol + '</td>' +
-        '<td class="down">' + r.declineFromHighPct.toFixed(1) + '%</td>' +
-        '<td>' + r.volRank.toFixed(0) + '</td>' +
-        '<td>' + (r.optionIv !== null && r.optionIv !== undefined ? r.optionIv.toFixed(1) : '—') + '</td>' +
+        '<td>' + (r.ltp !== null && r.ltp !== undefined ? r.ltp.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—') + '</td>' +
+        '<td class="' + pctClass(r.d1) + '">' + fmtPct(r.d1) + '</td>' +
+        '<td>' + r.lot.toLocaleString('en-IN') + '</td>' +
+        '<td class="' + pctClass(r.m1) + '">' + fmtPct(r.m1) + '</td>' +
+        '<td class="' + pctClass(r.m3) + '">' + fmtPct(r.m3) + '</td>' +
+        '<td class="' + pctClass(r.m6) + '">' + fmtPct(r.m6) + '</td>' +
         '</tr>';
     }).join('');
   }
 
+  function bindSortHeader(id, column){
+    var th = document.getElementById(id);
+    th.addEventListener('click', function(){
+      if (sortState.column === column) {
+        if (sortState.direction === 'desc') {
+          sortState.direction = 'asc';
+        } else {
+          sortState.column = null;
+          sortState.direction = 'desc';
+        }
+      } else {
+        sortState.column = column;
+        sortState.direction = 'desc';
+      }
+      sortHeaderIds.forEach(function(hid){ document.getElementById(hid).classList.remove('sort-asc', 'sort-desc'); });
+      if (sortState.column) th.classList.add(sortState.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+      renderRows();
+    });
+  }
+  bindSortHeader('thLtp', 'ltp');
+  bindSortHeader('thD1', 'd1');
+  bindSortHeader('thM1', 'm1');
+  bindSortHeader('thM3', 'm3');
+  bindSortHeader('thM6', 'm6');
+  document.getElementById('thD1').classList.add('sort-desc');
+
+  var searchInput = document.getElementById('stockSearch');
+  var searchClear = document.getElementById('stockSearchClear');
+  searchInput.addEventListener('input', function(){
+    searchClear.hidden = searchInput.value.trim().length === 0;
+    renderRows();
+  });
+  searchClear.addEventListener('click', function(){
+    searchInput.value = '';
+    searchClear.hidden = true;
+    renderRows();
+    searchInput.focus();
+  });
+
   function fetchBatch(offset){
-    fetch('/api/fyers/screener?offset=' + offset + '&limit=' + BATCH_LIMIT)
+    fetch('/api/fyers/gainers?offset=' + offset + '&limit=' + BATCH_LIMIT)
       .then(function(res){
         if (res.status === 401) {
-          statusEl.textContent = 'Connect your broker (top right) to run the screener.';
+          statusEl.textContent = 'Connect your broker (top right) to run the scan.';
           return null;
         }
         markBrokerConnected();
@@ -203,7 +307,7 @@
       .then(function(body){
         if (!body) { isScanning = false; refreshBtn.disabled = false; return; }
         if (body.status !== 'ok') {
-          statusEl.textContent = 'Screener failed: ' + (body.message || body.error || 'unknown error');
+          statusEl.textContent = 'Scan failed: ' + (body.message || body.error || 'unknown error');
           isScanning = false;
           refreshBtn.disabled = false;
           return;
@@ -212,10 +316,10 @@
         renderRows();
         var scanned = Math.min(offset + BATCH_LIMIT, body.total);
         if (body.nextOffset !== null) {
-          statusEl.textContent = 'Screening ' + scanned + '/' + body.total + '...';
+          statusEl.textContent = 'Scanning ' + scanned + '/' + body.total + '...';
           fetchBatch(body.nextOffset);
         } else {
-          statusEl.textContent = 'Done — ' + rows.length + ' match' + (rows.length === 1 ? '' : 'es') + ' found (of ' + body.total + ' F&O stocks screened).';
+          statusEl.textContent = 'Done — ' + rows.length + ' of ' + body.total + ' F&O stocks.';
           isScanning = false;
           refreshBtn.disabled = false;
           saveCache();
@@ -233,7 +337,7 @@
     refreshBtn.disabled = true;
     rows = [];
     renderRows();
-    statusEl.textContent = 'Starting screen...';
+    statusEl.textContent = 'Starting scan...';
     fetchBatch(0);
   }
 
@@ -242,10 +346,9 @@
     startScan();
   });
 
-  // Don't re-run the ~212-symbol screen on every visit: if a completed scan
-  // is cached, show it immediately and wait for an explicit Refresh click
-  // (or a disconnect/reconnect, which clears the cache -- see the connectBtn
-  // handler above). Only auto-run when there's nothing cached yet.
+  // Same rationale as hiv-stocks.html: don't re-run the ~210-symbol history
+  // scan on every visit -- show a completed cached scan immediately and
+  // require an explicit Refresh (or a disconnect/reconnect, which clears it).
   var cached = loadCache();
   if (cached) {
     rows = cached.rows || [];

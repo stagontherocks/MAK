@@ -291,6 +291,8 @@
                     <th>OI</th>
                     <th>LTP</th>
                     <th class="col-delta">Put Δ</th>
+                    <th>Intrinsic</th>
+                    <th>Time Value</th>
                   </tr>
                 </thead>
                 <tbody id="chainBody"></tbody>
@@ -604,6 +606,22 @@
       var atm = row.strike === chainData.atmStrike;
       var callOiPct = call ? Math.round((call.oi / maxCallOi) * 100) : 0;
       var putOiPct = put ? Math.round((put.oi / maxPutOi) * 100) : 0;
+
+      // Intrinsic Value (call) = Spot - Strike; (put) = Strike - Spot;
+      // Time Value = Premium - Intrinsic. Only meaningful for whichever
+      // side is actually in the money -- the OTM side's intrinsic is
+      // trivially 0 (all premium is time value), which isn't the
+      // interesting number here, so those cells just show '—'.
+      var intrinsic = null, timeValue = null;
+      if (spot !== null && callItm && call) {
+        intrinsic = spot - row.strike;
+        timeValue = call.ltp - intrinsic;
+      } else if (spot !== null && putItm && put) {
+        intrinsic = row.strike - spot;
+        timeValue = put.ltp - intrinsic;
+      }
+      var itmValueClass = (callItm || putItm) ? 'cell-itm' : '';
+
       return '<tr class="' + (atm ? 'atm-row' : '') + '">' +
         '<td class="col-delta' + (callItm ? ' cell-itm' : '') + '">' + (call ? '<span class="delta-call">' + fmtDelta(call.delta) + '</span>' : '—') + '</td>' +
         '<td class="' + (callItm ? 'cell-itm' : '') + '">' + (call ? fmtNum(call.ltp) : '—') + '</td>' +
@@ -612,6 +630,8 @@
         '<td class="cell-oi cell-oi-put' + (putItm ? ' cell-itm' : '') + '" style="--pct:' + putOiPct + '%"></td>' +
         '<td class="' + (putItm ? 'cell-itm' : '') + '">' + (put ? fmtNum(put.ltp) : '—') + '</td>' +
         '<td class="col-delta' + (putItm ? ' cell-itm' : '') + '">' + (put ? '<span class="delta-put">' + fmtDelta(put.delta) + '</span>' : '—') + '</td>' +
+        '<td class="' + itmValueClass + '">' + (intrinsic !== null ? fmtNum(intrinsic) : '—') + '</td>' +
+        '<td class="' + itmValueClass + '">' + (timeValue !== null ? fmtNum(timeValue) : '—') + '</td>' +
         '</tr>';
     }).join('');
 

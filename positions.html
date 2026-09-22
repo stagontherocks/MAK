@@ -87,13 +87,60 @@
     transition:transform .15s ease;
   }
   .position-row.expanded .pr-chevron{transform:rotate(180deg)}
-  .pr-expand{
-    padding:0 20px 18px 20px;color:#787878;font-size:13px;
-    border-bottom:1px solid #1e1e1e;
-  }
+  .pr-expand{border-bottom:1px solid #1e1e1e}
   .pr-expand:last-child{border-bottom:none}
   .price-up{color:#2ecc71}
   .price-down{color:#ff4d4f}
+
+  /* ---------- strategy leg table (expand panel) ---------- */
+  .leg-table{width:100%;border-collapse:collapse;min-width:760px}
+  .leg-table th{
+    text-align:right;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:#787878;padding:10px 14px;border-bottom:1px solid #262626;white-space:nowrap;
+  }
+  .leg-table th:first-child{text-align:left}
+  .leg-table th.col-tradetype,.leg-table th.col-status{text-align:center}
+  .leg-table td{
+    padding:10px 14px;font-size:13px;text-align:right;border-bottom:1px solid #1e1e1e;
+    font-variant-numeric:tabular-nums;color:#eeeeee;white-space:nowrap;
+  }
+  .leg-table tbody tr:hover td{background:#1c1c1c}
+  .leg-table td:first-child{text-align:left;font-weight:700}
+  .leg-table td.col-tradetype,.leg-table td.col-status{text-align:center}
+  .trade-type-pill{
+    display:inline-flex;align-items:center;justify-content:center;min-width:52px;
+    padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;color:#ffffff;
+  }
+  .trade-type-pill.buy{background:#2ecc71}
+  .trade-type-pill.sell{background:#ff4d4f}
+  .leg-status-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .leg-table tfoot td{
+    padding:12px 14px;font-size:12.5px;border-top:1px solid #262626;border-bottom:none;
+    color:#787878;font-weight:600;
+  }
+  .leg-table tfoot td:first-child{color:#eeeeee;font-weight:700;text-align:left}
+  .trade-pnl-label{font-weight:700;color:#eeeeee;margin-right:6px}
+  .trade-pnl-value{font-weight:700}
+
+  .leg-footer-bar{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    padding:14px 20px;flex-wrap:wrap;
+  }
+  .leg-footer-left{display:flex;align-items:center;gap:16px;font-size:12px}
+  .leg-delete-btn{
+    border:none;background:transparent;color:#ff4d4f;cursor:pointer;font-size:15px;
+    display:inline-flex;align-items:center;justify-content:center;padding:5px;border-radius:6px;
+    transition:background .15s ease;
+  }
+  .leg-delete-btn:hover{background:rgba(255,77,79,.15)}
+  .leg-meta-created{color:#4a90ff;font-weight:600}
+  .leg-meta-modified{color:#2ecc71;font-weight:600}
+  .analyze-trade-btn{
+    padding:9px 16px;border-radius:8px;background:#0d0d0d;color:#ffffff;font-size:12px;font-weight:700;
+    letter-spacing:.03em;text-transform:uppercase;border:1px solid #262626;cursor:pointer;font-family:inherit;
+    transition:background .15s ease;
+  }
+  .analyze-trade-btn:hover{background:#1c1c1c}
 
   /* ---------- add-strategy modal ---------- */
   .modal-overlay{
@@ -237,13 +284,31 @@
     fetch('/api/fyers/logout').catch(function(){}).then(function(){ markBrokerDisconnected(); });
   });
 
-  // Sample rows only -- there's no strategy data model yet (that's the
-  // builder/tracker work called out for a later pass). This just
-  // establishes the row layout against a couple of representative cases
-  // (profit and loss) until real data replaces it.
+  // Sample rows only -- there's no real strategy data model, screenshot
+  // parsing, or live leg pricing yet (that's later work). Each strategy now
+  // carries a legs[] array (the structure this phase is about) alongside
+  // the summary fields the top-level row already showed.
   var SAMPLE_POSITIONS = [
-    { symbol: 'HDFCBANK', date: '10-Aug-2026 10:04', ltp: 742.85, chp: 0.24, statusColor: '#ff6b6b', pnl: 9113.00 },
-    { symbol: 'RELIANCE', date: '08-Aug-2026 14:22', ltp: 1451.85, chp: -1.12, statusColor: '#2ecc71', pnl: -3245.50 },
+    {
+      symbol: 'HDFCBANK', date: '10-Aug-2026 10:04', ltp: 742.85, chp: 0.24, statusColor: '#ff6b6b', pnl: 9113.00,
+      createdAt: '10-Aug-2026 10:04', modifiedAt: '21-Aug-2026 11:32',
+      greeks: { delta: 0, theta: 0, gamma: 0, vega: 0 },
+      legs: [
+        { ticker: 'HDFCBANK 29SEP2026 780CE', tradeType: 'Sell', qty: -650, entryPrice: 12.23, currentPrice: 0.9, exitPrice: 5.7, pnl: 4244.50, statusColor: '#ff6b6b' },
+        { ticker: 'HDFCBANK 29SEP2026 780PE', tradeType: 'Sell', qty: -650, entryPrice: 52, currentPrice: 38.9, exitPrice: 47.05, pnl: 3217.50, statusColor: '#ff6b6b' },
+        { ticker: 'HDFCBANK 29SEP2026 720PE', tradeType: 'Buy', qty: 650, entryPrice: 17.4, currentPrice: 2.05, exitPrice: 10.4, pnl: -4550.00, statusColor: '#ff6b6b' },
+        { ticker: 'HDFCBANK 29SEP2026 680PE', tradeType: 'Sell', qty: -1950, entryPrice: 5.78, currentPrice: 0.4, exitPrice: 2.6, pnl: 6201.00, statusColor: '#ff6b6b' },
+      ],
+    },
+    {
+      symbol: 'RELIANCE', date: '08-Aug-2026 14:22', ltp: 1451.85, chp: -1.12, statusColor: '#2ecc71', pnl: -3245.50,
+      createdAt: '08-Aug-2026 14:22', modifiedAt: '08-Aug-2026 14:22',
+      greeks: { delta: 0, theta: 0, gamma: 0, vega: 0 },
+      legs: [
+        { ticker: 'RELIANCE 30OCT2026 1500CE', tradeType: 'Sell', qty: -500, entryPrice: 28.5, currentPrice: 34.2, exitPrice: 30.1, pnl: -2850.00, statusColor: '#2ecc71' },
+        { ticker: 'RELIANCE 30OCT2026 1400PE', tradeType: 'Buy', qty: 500, entryPrice: 22.1, currentPrice: 20.8, exitPrice: 21.5, pnl: -395.50, statusColor: '#2ecc71' },
+      ],
+    },
   ];
 
   var grid = document.getElementById('positionsGrid');
@@ -277,10 +342,75 @@
     }).join('');
   }
 
-  // Chevron toggles a placeholder expand panel -- establishes the
-  // interaction pattern for the detail view that comes with the strategy
-  // builder work, without building that view yet.
+  function fmtSigned(value){
+    return (value > 0 ? '+' : '') + fmtNum(value);
+  }
+
+  // Renders a strategy's legs[] as the Ticker/Trade Type/Qty/Entry/Current/
+  // Exit/P&L/Status table, plus a Positional Greeks summary row and a
+  // footer bar (delete, created/modified timestamps, Analyze Trade). Greeks
+  // are placeholder zeros and Analyze Trade has no handler yet -- both are
+  // later work (real Greeks need the payoff/analytics engine, not built
+  // yet; Analyze Trade's target view isn't built yet either).
+  function renderLegTable(strategy, index){
+    var legRows = strategy.legs.map(function(leg){
+      var pillClass = leg.tradeType === 'Buy' ? 'buy' : 'sell';
+      return '<tr>' +
+        '<td>' + leg.ticker + '</td>' +
+        '<td class="col-tradetype"><span class="trade-type-pill ' + pillClass + '">' + leg.tradeType + '</span></td>' +
+        '<td>' + fmtNum(leg.qty) + '</td>' +
+        '<td>' + fmtNum(leg.entryPrice) + '</td>' +
+        '<td>' + fmtNum(leg.currentPrice) + '</td>' +
+        '<td>' + fmtNum(leg.exitPrice) + '</td>' +
+        '<td class="' + pctClass(leg.pnl) + '">' + fmtSigned(leg.pnl) + '</td>' +
+        '<td class="col-status"><span class="leg-status-dot" style="background:' + leg.statusColor + '"></span></td>' +
+        '</tr>';
+    }).join('');
+
+    var tradePnl = strategy.legs.reduce(function(sum, leg){ return sum + leg.pnl; }, 0);
+    var greeks = strategy.greeks;
+
+    return '' +
+      '<div class="leg-table-scroll" style="overflow:auto">' +
+      '<table class="leg-table">' +
+        '<thead><tr>' +
+          '<th>Ticker</th><th class="col-tradetype">Trade Type</th><th>Qty</th>' +
+          '<th>Entry Price</th><th>Current Price</th><th>Exit Price</th><th>P&amp;L</th>' +
+          '<th class="col-status">Status</th>' +
+        '</tr></thead>' +
+        '<tbody>' + legRows + '</tbody>' +
+        '<tfoot><tr>' +
+          '<td colspan="2">Positional Greeks</td>' +
+          '<td>Delta: ' + greeks.delta.toFixed(2) + '</td>' +
+          '<td>Theta: ' + greeks.theta.toFixed(2) + '</td>' +
+          '<td>Gamma: ' + greeks.gamma.toFixed(2) + '</td>' +
+          '<td>Vega: ' + greeks.vega.toFixed(2) + '</td>' +
+          '<td><span class="trade-pnl-label">Trade P&amp;L</span><span class="trade-pnl-value ' + pctClass(tradePnl) + '">₹ ' + fmtSigned(tradePnl) + '</span></td>' +
+          '<td></td>' +
+        '</tr></tfoot>' +
+      '</table>' +
+      '</div>' +
+      '<div class="leg-footer-bar">' +
+        '<div class="leg-footer-left">' +
+          '<button type="button" class="leg-delete-btn" data-index="' + index + '" aria-label="Delete strategy">🗑</button>' +
+          '<span class="leg-meta-created">Created At: ' + strategy.createdAt + '</span>' +
+          '<span class="leg-meta-modified">Modified At: ' + strategy.modifiedAt + '</span>' +
+        '</div>' +
+        '<button type="button" class="analyze-trade-btn">Analyze Trade</button>' +
+      '</div>';
+  }
+
+  // Chevron toggles the leg table for that strategy. Delete removes the
+  // whole strategy (event-delegated since the expand panel is created
+  // dynamically as a sibling of its row, not a descendant).
   grid.addEventListener('click', function(e){
+    var deleteBtn = e.target.closest('.leg-delete-btn');
+    if (deleteBtn) {
+      SAMPLE_POSITIONS.splice(Number(deleteBtn.getAttribute('data-index')), 1);
+      renderPositions(SAMPLE_POSITIONS);
+      return;
+    }
+
     var row = e.target.closest('.position-row');
     if (!row) return;
     var existing = row.nextElementSibling;
@@ -291,9 +421,10 @@
     }
     document.querySelectorAll('.pr-expand').forEach(function(el){ el.remove(); });
     document.querySelectorAll('.position-row.expanded').forEach(function(el){ el.classList.remove('expanded'); });
+    var index = Number(row.getAttribute('data-index'));
     var expand = document.createElement('div');
     expand.className = 'pr-expand';
-    expand.textContent = 'Strategy details coming soon.';
+    expand.innerHTML = renderLegTable(SAMPLE_POSITIONS[index], index);
     row.after(expand);
     row.classList.add('expanded');
   });

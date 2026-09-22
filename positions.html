@@ -75,10 +75,10 @@
   .position-row:hover{background:#1c1c1c}
   .pr-name{flex:0 0 180px;min-width:0}
   .pr-symbol{font-weight:700;font-size:15px}
-  .pr-date{font-size:12px;color:#787878;margin-top:3px}
   .pr-price{flex:0 0 200px}
   .pr-ltp{font-weight:700;font-size:15px}
   .pr-chg{font-weight:700;font-size:15px;margin-left:6px}
+  .pr-date{flex:0 0 160px;font-size:12px;color:#787878}
   .pr-status{flex:0 0 120px;display:flex;justify-content:center}
   .status-dot{width:12px;height:12px;border-radius:50%}
   .pr-pnl{flex:1;text-align:right;font-weight:700;font-size:15px}
@@ -94,6 +94,59 @@
   .pr-expand:last-child{border-bottom:none}
   .price-up{color:#2ecc71}
   .price-down{color:#ff4d4f}
+
+  /* ---------- add-strategy modal ---------- */
+  .modal-overlay{
+    position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);
+    display:flex;align-items:center;justify-content:center;padding:20px;
+  }
+  .modal-overlay[hidden]{display:none}
+  .modal-box{
+    background:#161616;border:1px solid #262626;border-radius:12px;
+    width:100%;max-width:440px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .modal-heading{font-size:18px;font-weight:700;margin-bottom:20px}
+  .modal-field{margin-bottom:16px}
+  .modal-label{
+    display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:#787878;margin-bottom:8px;
+  }
+  .modal-input{
+    width:100%;background:#111111;border:1px solid #262626;color:#eeeeee;
+    font-family:inherit;font-size:14px;font-weight:600;padding:10px 14px;border-radius:8px;
+  }
+  .modal-input::placeholder{color:#787878;font-weight:500}
+  .modal-input:focus{outline:none;border-color:#4a4a4a}
+
+  .image-dropzone{
+    border:1.5px dashed #333333;border-radius:10px;padding:28px 16px;text-align:center;
+    cursor:pointer;transition:border-color .15s ease,background .15s ease;
+  }
+  .image-dropzone:hover,.image-dropzone.dragover{border-color:#4a90ff;background:rgba(74,144,255,.06)}
+  .image-dropzone .dz-text{font-size:13px;font-weight:600;color:#c2c2c2}
+  .image-dropzone .dz-browse{color:#4a90ff;font-weight:700;text-decoration:underline}
+  .image-dropzone .dz-hint{font-size:12px;color:#787878;margin-top:6px}
+
+  .image-preview{position:relative;border-radius:10px;overflow:hidden;border:1px solid #262626}
+  .image-preview[hidden]{display:none}
+  .image-preview img{display:block;width:100%;max-height:220px;object-fit:contain;background:#0d0d0d}
+  .image-remove-btn{
+    position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:999px;
+    background:rgba(0,0,0,.65);color:#ffffff;border:none;cursor:pointer;font-size:14px;line-height:1;
+    display:inline-flex;align-items:center;justify-content:center;transition:background .15s ease;
+  }
+  .image-remove-btn:hover{background:rgba(255,77,79,.85)}
+
+  .modal-actions{display:flex;align-items:center;justify-content:space-between;margin-top:24px}
+  .modal-actions-right{display:flex;gap:10px}
+  .modal-btn{
+    padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;
+    cursor:pointer;border:1px solid #262626;background:#1c1c1c;color:#eeeeee;
+    transition:background .15s ease;
+  }
+  .modal-btn:hover{background:#262626}
+  .modal-btn-primary{background:#2ecc71;color:#0d1f14;border-color:transparent}
+  .modal-btn-primary:hover{background:#3ee082}
 </style>
 </head>
 <body>
@@ -115,13 +168,43 @@
 <main>
   <div class="wrap">
     <div class="positions-toolbar">
-      <!-- Placeholder for now -- strategy builder (add/track/view/update) is
-           coming in a later pass, this button intentionally has no handler yet. -->
-      <button type="button" class="add-strategy-btn">+ Add Strategy</button>
+      <button type="button" class="add-strategy-btn" id="addStrategyBtn">+ Add Strategy</button>
     </div>
     <div class="grid-card" id="positionsGrid"></div>
   </div>
 </main>
+
+<!-- What happens with the name/image beyond capturing them here (persistence,
+     rendering into the grid, etc.) is deliberately not built yet -- the full
+     strategy builder/tracker is later work. -->
+<div class="modal-overlay" id="strategyModalOverlay" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="strategyModalHeading">
+    <div class="modal-heading" id="strategyModalHeading">Add Strategy</div>
+    <div class="modal-field">
+      <label class="modal-label" for="strategyNameInput">Strategy Name</label>
+      <input type="text" class="modal-input" id="strategyNameInput" placeholder="e.g. Iron Condor" autocomplete="off">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Image</label>
+      <div class="image-dropzone" id="imageDropzone">
+        <div class="dz-text">Drag &amp; drop, paste, or <span class="dz-browse">browse</span> to upload</div>
+        <div class="dz-hint">One image only — PNG, JPG, or a pasted screenshot</div>
+      </div>
+      <div class="image-preview" id="imagePreview" hidden>
+        <img id="imagePreviewImg" alt="Strategy image preview">
+        <button type="button" class="image-remove-btn" id="imageRemoveBtn" aria-label="Remove image">&times;</button>
+      </div>
+      <input type="file" accept="image/*" id="imageFileInput" hidden>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="modal-btn" id="strategyResetBtn">Reset</button>
+      <div class="modal-actions-right">
+        <button type="button" class="modal-btn" id="strategyCancelBtn">Cancel</button>
+        <button type="button" class="modal-btn modal-btn-primary" id="strategyAddBtn">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
   var connectBtn = document.getElementById('connectBtn');
@@ -172,12 +255,12 @@
       return '<div class="position-row" data-index="' + i + '">' +
         '<div class="pr-name">' +
           '<div class="pr-symbol">' + p.symbol + '</div>' +
-          '<div class="pr-date">' + p.date + '</div>' +
         '</div>' +
         '<div class="pr-price">' +
           '<span class="pr-ltp">' + fmtNum(p.ltp) + '</span>' +
           '<span class="pr-chg ' + pctClass(p.chp) + '">(' + (p.chp > 0 ? '+' : '') + p.chp.toFixed(2) + '%)</span>' +
         '</div>' +
+        '<div class="pr-date">' + p.date + '</div>' +
         '<div class="pr-status"><span class="status-dot" style="background:' + p.statusColor + '"></span></div>' +
         '<div class="pr-pnl ' + pctClass(p.pnl) + '">₹ ' + (p.pnl > 0 ? '+' : '') + fmtNum(p.pnl) + '</div>' +
         '<div class="pr-chevron">⌄</div>' +
@@ -207,6 +290,103 @@
   });
 
   renderPositions(SAMPLE_POSITIONS);
+
+  // ---------- Add Strategy modal ----------
+  var addStrategyBtn = document.getElementById('addStrategyBtn');
+  var modalOverlay = document.getElementById('strategyModalOverlay');
+  var strategyNameInput = document.getElementById('strategyNameInput');
+  var imageDropzone = document.getElementById('imageDropzone');
+  var imagePreview = document.getElementById('imagePreview');
+  var imagePreviewImg = document.getElementById('imagePreviewImg');
+  var imageRemoveBtn = document.getElementById('imageRemoveBtn');
+  var imageFileInput = document.getElementById('imageFileInput');
+  var strategyResetBtn = document.getElementById('strategyResetBtn');
+  var strategyCancelBtn = document.getElementById('strategyCancelBtn');
+  var strategyAddBtn = document.getElementById('strategyAddBtn');
+
+  var selectedImageFile = null; // only one at a time -- a new pick/drop/paste always replaces it
+
+  function resetStrategyForm(){
+    strategyNameInput.value = '';
+    selectedImageFile = null;
+    imageFileInput.value = '';
+    imagePreviewImg.src = '';
+    imagePreview.hidden = true;
+    imageDropzone.hidden = false;
+  }
+
+  function setStrategyImage(file){
+    if (!file || file.type.indexOf('image/') !== 0) return;
+    selectedImageFile = file;
+    var reader = new FileReader();
+    reader.onload = function(){
+      imagePreviewImg.src = reader.result;
+      imagePreview.hidden = false;
+      imageDropzone.hidden = true;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleModalPaste(e){
+    var items = (e.clipboardData && e.clipboardData.items) || [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image/') === 0) {
+        setStrategyImage(items[i].getAsFile());
+        e.preventDefault();
+        break;
+      }
+    }
+  }
+
+  function openStrategyModal(){
+    resetStrategyForm();
+    modalOverlay.hidden = false;
+    document.addEventListener('paste', handleModalPaste);
+  }
+  function closeStrategyModal(){
+    modalOverlay.hidden = true;
+    document.removeEventListener('paste', handleModalPaste);
+  }
+
+  addStrategyBtn.addEventListener('click', openStrategyModal);
+  strategyCancelBtn.addEventListener('click', closeStrategyModal);
+  strategyResetBtn.addEventListener('click', resetStrategyForm);
+  modalOverlay.addEventListener('click', function(e){
+    if (e.target === modalOverlay) closeStrategyModal();
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && !modalOverlay.hidden) closeStrategyModal();
+  });
+  strategyAddBtn.addEventListener('click', function(){
+    // Name + image are captured (strategyNameInput.value / selectedImageFile)
+    // but not persisted or used anywhere yet -- that's later work.
+    closeStrategyModal();
+  });
+
+  imageDropzone.addEventListener('click', function(){ imageFileInput.click(); });
+  imageFileInput.addEventListener('change', function(){
+    if (imageFileInput.files && imageFileInput.files[0]) setStrategyImage(imageFileInput.files[0]);
+  });
+  imageDropzone.addEventListener('dragover', function(e){
+    e.preventDefault();
+    imageDropzone.classList.add('dragover');
+  });
+  imageDropzone.addEventListener('dragleave', function(){
+    imageDropzone.classList.remove('dragover');
+  });
+  imageDropzone.addEventListener('drop', function(e){
+    e.preventDefault();
+    imageDropzone.classList.remove('dragover');
+    var file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) setStrategyImage(file);
+  });
+  imageRemoveBtn.addEventListener('click', function(e){
+    e.stopPropagation();
+    selectedImageFile = null;
+    imageFileInput.value = '';
+    imagePreview.hidden = true;
+    imageDropzone.hidden = false;
+  });
 </script>
 </body>
 </html>

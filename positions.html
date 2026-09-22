@@ -200,6 +200,34 @@
   .modal-btn:hover{background:#262626}
   .modal-btn-primary{background:#2ecc71;color:#0d1f14;border-color:transparent}
   .modal-btn-primary:hover{background:#3ee082}
+  .modal-btn:disabled{opacity:.5;cursor:not-allowed}
+  .modal-box.wide{max-width:720px}
+
+  .modal-error{
+    background:rgba(255,77,79,.1);border:1px solid rgba(255,77,79,.3);color:#ff8a8a;
+    font-size:12.5px;font-weight:600;padding:10px 14px;border-radius:8px;margin-bottom:16px;
+  }
+  .modal-error[hidden]{display:none}
+
+  .review-subheading{font-size:12.5px;color:#787878;margin-bottom:14px}
+  .leg-edit-table{width:100%;border-collapse:collapse;margin-bottom:12px}
+  .leg-edit-table th{
+    text-align:left;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:#787878;padding:0 8px 8px;
+  }
+  .leg-edit-table td{padding:0 8px 10px;vertical-align:middle}
+  .leg-edit-table .modal-input{padding:8px 10px;font-size:13px}
+  .leg-remove-row-btn{
+    border:none;background:transparent;color:#787878;cursor:pointer;font-size:16px;line-height:1;
+    padding:6px;border-radius:6px;transition:background .15s ease,color .15s ease;
+  }
+  .leg-remove-row-btn:hover{background:rgba(255,77,79,.15);color:#ff4d4f}
+  .add-leg-row-btn{
+    background:transparent;border:1px dashed #333333;color:#c2c2c2;font-family:inherit;
+    font-size:12.5px;font-weight:700;padding:8px 14px;border-radius:8px;cursor:pointer;width:100%;
+    transition:border-color .15s ease,background .15s ease;
+  }
+  .add-leg-row-btn:hover{border-color:#4a90ff;background:rgba(74,144,255,.06)}
 </style>
 </head>
 <body>
@@ -236,27 +264,45 @@
       <div class="modal-heading" id="strategyModalHeading">Add Strategy</div>
       <button type="button" class="modal-close-btn" id="strategyCloseBtn" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-field">
-      <label class="modal-label" for="strategyNameInput">Strategy Name</label>
-      <input type="text" class="modal-input" id="strategyNameInput" placeholder="e.g. Iron Condor" autocomplete="off">
-    </div>
-    <div class="modal-field">
-      <label class="modal-label">Image</label>
-      <div class="image-dropzone" id="imageDropzone">
-        <div class="dz-text">Drag &amp; drop, paste, or <span class="dz-browse">browse</span> to upload</div>
-        <div class="dz-hint">One image only — PNG, JPG, or a pasted screenshot</div>
+
+    <div class="modal-error" id="modalError" hidden></div>
+
+    <div id="modalStepForm">
+      <div class="modal-field">
+        <label class="modal-label" for="strategyNameInput">Strategy Name</label>
+        <input type="text" class="modal-input" id="strategyNameInput" placeholder="e.g. Iron Condor" autocomplete="off">
       </div>
-      <div class="image-preview" id="imagePreview" hidden>
-        <img id="imagePreviewImg" alt="Strategy image preview">
-        <button type="button" class="image-remove-btn" id="imageRemoveBtn" aria-label="Remove image">&times;</button>
+      <div class="modal-field">
+        <label class="modal-label">Image</label>
+        <div class="image-dropzone" id="imageDropzone">
+          <div class="dz-text">Drag &amp; drop, paste, or <span class="dz-browse">browse</span> to upload</div>
+          <div class="dz-hint">One image only — PNG, JPG, or a pasted screenshot</div>
+        </div>
+        <div class="image-preview" id="imagePreview" hidden>
+          <img id="imagePreviewImg" alt="Strategy image preview">
+          <button type="button" class="image-remove-btn" id="imageRemoveBtn" aria-label="Remove image">&times;</button>
+        </div>
+        <input type="file" accept="image/*" id="imageFileInput" hidden>
       </div>
-      <input type="file" accept="image/*" id="imageFileInput" hidden>
     </div>
+
+    <div id="modalStepReview" hidden>
+      <div class="review-subheading">Check the extracted legs below before adding — fix anything the image reader got wrong.</div>
+      <table class="leg-edit-table">
+        <thead>
+          <tr><th>Ticker</th><th>Trade Type</th><th>Qty</th><th>Entry Price</th><th></th></tr>
+        </thead>
+        <tbody id="reviewLegsBody"></tbody>
+      </table>
+      <button type="button" class="add-leg-row-btn" id="addLegRowBtn">+ Add Leg</button>
+    </div>
+
     <div class="modal-actions">
       <button type="button" class="modal-btn" id="strategyResetBtn">Reset</button>
+      <button type="button" class="modal-btn" id="reviewBackBtn" hidden>Back</button>
       <div class="modal-actions-right">
         <button type="button" class="modal-btn" id="strategyCancelBtn">Cancel</button>
-        <button type="button" class="modal-btn modal-btn-primary" id="strategyAddBtn">Add</button>
+        <button type="button" class="modal-btn modal-btn-primary" id="strategyAddBtn">Extract Legs</button>
       </div>
     </div>
   </div>
@@ -314,6 +360,7 @@
   var grid = document.getElementById('positionsGrid');
 
   function fmtNum(value){
+    if (value === null || value === undefined) return '—';
     return value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
   }
   function pctClass(value){
@@ -331,8 +378,9 @@
           '<div class="pr-symbol">' + p.symbol + '</div>' +
         '</div>' +
         '<div class="pr-price">' +
-          '<span class="pr-ltp">' + fmtNum(p.ltp) + '</span>' +
-          '<span class="pr-chg ' + pctClass(p.chp) + '">(' + (p.chp > 0 ? '+' : '') + p.chp.toFixed(2) + '%)</span>' +
+          '<span class="pr-ltp">' + (p.ltp !== null && p.ltp !== undefined ? fmtNum(p.ltp) : '—') + '</span>' +
+          (p.chp !== null && p.chp !== undefined ?
+            '<span class="pr-chg ' + pctClass(p.chp) + '">(' + (p.chp > 0 ? '+' : '') + p.chp.toFixed(2) + '%)</span>' : '') +
         '</div>' +
         '<div class="pr-date">' + p.date + '</div>' +
         '<div class="pr-status"><span class="status-dot" style="background:' + p.statusColor + '"></span></div>' +
@@ -434,6 +482,10 @@
   // ---------- Add Strategy modal ----------
   var addStrategyBtn = document.getElementById('addStrategyBtn');
   var modalOverlay = document.getElementById('strategyModalOverlay');
+  var modalBox = document.querySelector('.modal-box');
+  var modalError = document.getElementById('modalError');
+  var modalStepForm = document.getElementById('modalStepForm');
+  var modalStepReview = document.getElementById('modalStepReview');
   var strategyNameInput = document.getElementById('strategyNameInput');
   var imageDropzone = document.getElementById('imageDropzone');
   var imagePreview = document.getElementById('imagePreview');
@@ -441,11 +493,17 @@
   var imageRemoveBtn = document.getElementById('imageRemoveBtn');
   var imageFileInput = document.getElementById('imageFileInput');
   var strategyResetBtn = document.getElementById('strategyResetBtn');
+  var reviewBackBtn = document.getElementById('reviewBackBtn');
   var strategyCancelBtn = document.getElementById('strategyCancelBtn');
   var strategyCloseBtn = document.getElementById('strategyCloseBtn');
   var strategyAddBtn = document.getElementById('strategyAddBtn');
+  var reviewLegsBody = document.getElementById('reviewLegsBody');
+  var addLegRowBtn = document.getElementById('addLegRowBtn');
 
   var selectedImageFile = null; // only one at a time -- a new pick/drop/paste always replaces it
+  var modalStep = 'form';       // 'form' | 'review'
+  var reviewLegs = [];          // editable working copy of the extracted (or manually added) legs
+  var reviewUnderlying = null;
 
   function resetStrategyForm(){
     strategyNameInput.value = '';
@@ -454,6 +512,27 @@
     imagePreviewImg.src = '';
     imagePreview.hidden = true;
     imageDropzone.hidden = false;
+    reviewLegs = [];
+    reviewUnderlying = null;
+  }
+
+  function showModalError(message){
+    modalError.textContent = message;
+    modalError.hidden = false;
+  }
+  function hideModalError(){
+    modalError.hidden = true;
+  }
+
+  function setModalStep(step){
+    modalStep = step;
+    modalStepForm.hidden = step !== 'form';
+    modalStepReview.hidden = step !== 'review';
+    strategyResetBtn.hidden = step !== 'form';
+    reviewBackBtn.hidden = step !== 'review';
+    strategyAddBtn.textContent = step === 'review' ? 'Confirm & Add' : 'Extract Legs';
+    modalBox.classList.toggle('wide', step === 'review');
+    hideModalError();
   }
 
   function setStrategyImage(file){
@@ -469,6 +548,7 @@
   }
 
   function handleModalPaste(e){
+    if (modalStep !== 'form') return;
     var items = (e.clipboardData && e.clipboardData.items) || [];
     for (var i = 0; i < items.length; i++) {
       if (items[i].type.indexOf('image/') === 0) {
@@ -481,6 +561,7 @@
 
   function openStrategyModal(){
     resetStrategyForm();
+    setModalStep('form');
     modalOverlay.hidden = false;
     document.addEventListener('paste', handleModalPaste);
   }
@@ -493,16 +574,12 @@
   strategyCancelBtn.addEventListener('click', closeStrategyModal);
   strategyCloseBtn.addEventListener('click', closeStrategyModal);
   strategyResetBtn.addEventListener('click', resetStrategyForm);
+  reviewBackBtn.addEventListener('click', function(){ setModalStep('form'); });
   modalOverlay.addEventListener('click', function(e){
     if (e.target === modalOverlay) closeStrategyModal();
   });
   document.addEventListener('keydown', function(e){
     if (e.key === 'Escape' && !modalOverlay.hidden) closeStrategyModal();
-  });
-  strategyAddBtn.addEventListener('click', function(){
-    // Name + image are captured (strategyNameInput.value / selectedImageFile)
-    // but not persisted or used anywhere yet -- that's later work.
-    closeStrategyModal();
   });
 
   imageDropzone.addEventListener('click', function(){ imageFileInput.click(); });
@@ -528,6 +605,159 @@
     imageFileInput.value = '';
     imagePreview.hidden = true;
     imageDropzone.hidden = false;
+  });
+
+  // ---------- Review step: editable leg table ----------
+  function renderReviewLegs(){
+    if (reviewLegs.length === 0) {
+      reviewLegsBody.innerHTML = '<tr><td colspan="5" style="color:#787878;font-size:13px;padding:8px">No legs yet -- click "+ Add Leg" to enter one manually.</td></tr>';
+      return;
+    }
+    reviewLegsBody.innerHTML = reviewLegs.map(function(leg, i){
+      return '<tr>' +
+        '<td><input type="text" class="modal-input leg-edit-input" data-field="ticker" data-idx="' + i + '" value="' + leg.ticker.replace(/"/g, '&quot;') + '"></td>' +
+        '<td><select class="modal-input leg-edit-input" data-field="tradeType" data-idx="' + i + '">' +
+          '<option value="Buy"' + (leg.tradeType === 'Buy' ? ' selected' : '') + '>Buy</option>' +
+          '<option value="Sell"' + (leg.tradeType === 'Sell' ? ' selected' : '') + '>Sell</option>' +
+          '</select></td>' +
+        '<td><input type="number" class="modal-input leg-edit-input" data-field="qty" data-idx="' + i + '" value="' + leg.qty + '"></td>' +
+        '<td><input type="number" step="0.01" class="modal-input leg-edit-input" data-field="entryPrice" data-idx="' + i + '" value="' + leg.entryPrice + '"></td>' +
+        '<td><button type="button" class="leg-remove-row-btn" data-idx="' + i + '" aria-label="Remove leg">&times;</button></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  reviewLegsBody.addEventListener('input', function(e){
+    var input = e.target.closest('.leg-edit-input');
+    if (!input) return;
+    var idx = Number(input.getAttribute('data-idx'));
+    var field = input.getAttribute('data-field');
+    var leg = reviewLegs[idx];
+    if (!leg) return;
+    if (field === 'qty' || field === 'entryPrice') leg[field] = Number(input.value);
+    else leg[field] = input.value;
+  });
+  reviewLegsBody.addEventListener('click', function(e){
+    var btn = e.target.closest('.leg-remove-row-btn');
+    if (!btn) return;
+    reviewLegs.splice(Number(btn.getAttribute('data-idx')), 1);
+    renderReviewLegs();
+  });
+  addLegRowBtn.addEventListener('click', function(){
+    reviewLegs.push({ ticker: '', tradeType: 'Buy', qty: 0, entryPrice: 0 });
+    renderReviewLegs();
+  });
+
+  // ---------- Extraction + confirm ----------
+  var MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function formatDateTime(d){
+    var day = String(d.getDate()).padStart(2, '0');
+    var hh = String(d.getHours()).padStart(2, '0');
+    var mm = String(d.getMinutes()).padStart(2, '0');
+    return day + '-' + MONTH_NAMES[d.getMonth()] + '-' + d.getFullYear() + ' ' + hh + ':' + mm;
+  }
+
+  function extractLegsFromImage(){
+    if (!selectedImageFile) {
+      // No image to read -- skip straight to an empty review step so legs
+      // can still be entered by hand via "+ Add Leg".
+      reviewLegs = [];
+      reviewUnderlying = null;
+      renderReviewLegs();
+      setModalStep('review');
+      return;
+    }
+    hideModalError();
+    strategyAddBtn.disabled = true;
+    strategyAddBtn.textContent = 'Extracting…';
+
+    var reader = new FileReader();
+    reader.onload = function(){
+      fetch('/api/strategy/parse-legs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ image: reader.result }),
+      })
+        .then(function(res){ return res.json().then(function(body){ return { ok: res.ok, body: body }; }); })
+        .then(function(result){
+          strategyAddBtn.disabled = false;
+          if (!result.ok || result.body.status !== 'ok') {
+            throw new Error((result.body && result.body.message) || 'Could not read that image.');
+          }
+          reviewLegs = result.body.legs.map(function(leg){
+            return { ticker: leg.ticker || '', tradeType: leg.tradeType === 'Sell' ? 'Sell' : 'Buy', qty: Number(leg.qty) || 0, entryPrice: Number(leg.entryPrice) || 0 };
+          });
+          reviewUnderlying = result.body.underlying || null;
+          renderReviewLegs();
+          setModalStep('review');
+        })
+        .catch(function(err){
+          strategyAddBtn.disabled = false;
+          strategyAddBtn.textContent = 'Extract Legs';
+          showModalError(err.message || 'Could not read that image. Try a clearer screenshot, or add legs manually.');
+        });
+    };
+    reader.readAsDataURL(selectedImageFile);
+  }
+
+  // Best-effort: if the extracted underlying is a symbol this app already
+  // tracks quotes for, pull its live LTP/% change in after the strategy is
+  // added. Silent no-op otherwise -- this phase is about getting legs
+  // structured, not live pricing.
+  function fetchUnderlyingQuoteAndUpdate(strategy){
+    fetch('/api/fyers/quotes')
+      .then(function(res){ return res.json(); })
+      .then(function(body){
+        var q = body && body.quotes && body.quotes[strategy.symbol];
+        if (!q || q.ltp === null || q.ltp === undefined) return;
+        strategy.ltp = q.ltp;
+        strategy.chp = q.chp !== undefined ? q.chp : null;
+        renderPositions(SAMPLE_POSITIONS);
+      })
+      .catch(function(){});
+  }
+
+  function confirmAddStrategy(){
+    if (reviewLegs.length === 0) {
+      showModalError('Add at least one leg before confirming.');
+      return;
+    }
+    for (var i = 0; i < reviewLegs.length; i++) {
+      if (!reviewLegs[i].ticker.trim()) {
+        showModalError('Every leg needs a ticker.');
+        return;
+      }
+    }
+
+    var now = new Date();
+    var dateStr = formatDateTime(now);
+    var legs = reviewLegs.map(function(leg){
+      // Fresh legs have no live current/exit price yet (that's a later
+      // phase) -- default current to entry so P&L starts at 0 rather than
+      // showing a misleading number.
+      return {
+        ticker: leg.ticker.trim(), tradeType: leg.tradeType, qty: leg.qty, entryPrice: leg.entryPrice,
+        currentPrice: leg.entryPrice, exitPrice: null, pnl: 0, statusColor: '#888888',
+      };
+    });
+
+    var strategy = {
+      symbol: reviewUnderlying || strategyNameInput.value.trim() || 'Strategy',
+      date: dateStr, ltp: null, chp: null, statusColor: '#888888', pnl: 0,
+      createdAt: dateStr, modifiedAt: dateStr,
+      greeks: { delta: 0, theta: 0, gamma: 0, vega: 0 },
+      legs: legs,
+    };
+
+    SAMPLE_POSITIONS.unshift(strategy);
+    renderPositions(SAMPLE_POSITIONS);
+    closeStrategyModal();
+    if (reviewUnderlying) fetchUnderlyingQuoteAndUpdate(strategy);
+  }
+
+  strategyAddBtn.addEventListener('click', function(){
+    if (modalStep === 'form') extractLegsFromImage();
+    else confirmAddStrategy();
   });
 </script>
 </body>

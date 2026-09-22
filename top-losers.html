@@ -49,7 +49,20 @@
 
   main{padding:32px 0 64px}
 
-  .grid-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+  .grid-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap;row-gap:12px}
+  .grid-toolbar-left{display:flex;align-items:center;gap:16px;flex-wrap:wrap;row-gap:12px}
+  .toolbar-divider{width:1px;height:24px;background:#262626;flex-shrink:0}
+  .magnitude-toggle{
+    display:flex;align-items:center;background:#1a1a1a;border:1px solid #262626;
+    border-radius:999px;padding:3px;gap:2px;flex-shrink:0;
+  }
+  .magnitude-btn{
+    border:none;background:transparent;color:#787878;font-size:12px;font-weight:700;
+    letter-spacing:.02em;padding:7px 14px;border-radius:999px;cursor:pointer;
+    font-family:inherit;transition:background .15s ease,color .15s ease;
+  }
+  .magnitude-btn:hover{color:#c2c2c2}
+  .magnitude-btn.active{background:rgba(255,77,79,.15);color:#ff4d4f}
   .search-wrap{position:relative;width:220px}
   .search-input{
     background:#161616 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23787878" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') no-repeat 14px center/14px;
@@ -127,9 +140,20 @@
 <main>
   <div class="wrap">
     <div class="grid-toolbar">
-      <div class="search-wrap">
-        <input type="text" class="search-input" id="stockSearch" placeholder="Search stock..." aria-label="Search stocks">
-        <button type="button" class="search-clear" id="stockSearchClear" aria-label="Clear search" hidden>&times;</button>
+      <div class="grid-toolbar-left">
+        <div class="search-wrap">
+          <input type="text" class="search-input" id="stockSearch" placeholder="Search stock..." aria-label="Search stocks">
+          <button type="button" class="search-clear" id="stockSearchClear" aria-label="Clear search" hidden>&times;</button>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="magnitude-toggle" id="magnitudeToggle">
+          <button type="button" class="magnitude-btn active" data-threshold="0">All</button>
+          <button type="button" class="magnitude-btn" data-threshold="5">&lt;-5%</button>
+          <button type="button" class="magnitude-btn" data-threshold="10">&lt;-10%</button>
+          <button type="button" class="magnitude-btn" data-threshold="15">&lt;-15%</button>
+          <button type="button" class="magnitude-btn" data-threshold="20">&lt;-20%</button>
+          <button type="button" class="magnitude-btn" data-threshold="30">&lt;-30%</button>
+        </div>
       </div>
       <div class="toolbar-right">
         <div class="screener-status" id="screenerStatus">Starting scan...</div>
@@ -242,9 +266,17 @@
     });
   }
 
+  function passesMagnitudeFilter(r){
+    if (magnitudeThreshold === 0) return true;
+    if (r.d1 === null || r.d1 === undefined) return false;
+    return r.d1 < -magnitudeThreshold;
+  }
+
   function renderRows(){
     var term = searchInput.value.trim().toUpperCase();
-    var visible = sortedRows().filter(function(r){ return r.symbol.indexOf(term) !== -1; });
+    var visible = sortedRows().filter(function(r){
+      return r.symbol.indexOf(term) !== -1 && passesMagnitudeFilter(r);
+    });
     gridBody.innerHTML = visible.map(function(r){
       return '<tr>' +
         '<td>' + r.symbol + '</td>' +
@@ -295,6 +327,18 @@
     searchClear.hidden = true;
     renderRows();
     searchInput.focus();
+  });
+
+  var magnitudeToggle = document.getElementById('magnitudeToggle');
+  var magnitudeThreshold = 0;
+  magnitudeToggle.addEventListener('click', function(e){
+    var btn = e.target.closest('.magnitude-btn');
+    if (!btn) return;
+    magnitudeThreshold = Number(btn.getAttribute('data-threshold'));
+    var buttons = magnitudeToggle.querySelectorAll('.magnitude-btn');
+    for (var i = 0; i < buttons.length; i++) buttons[i].classList.remove('active');
+    btn.classList.add('active');
+    renderRows();
   });
 
   // Reuses the same /api/fyers/gainers endpoint as top-gainers.html -- it

@@ -239,6 +239,14 @@
     if (value === null || value === undefined) return '';
     return value > 0 ? 'price-up' : (value < 0 ? 'price-down' : '');
   }
+  // ATH ("% from the 52-week high") is always <=0 by construction, so
+  // coloring it by literal sign would paint this GAINERS page red -- looks
+  // backwards even though the math is right. Force green instead; a small
+  // magnitude (close to the high) is the interesting case here.
+  function rowColorClass(value){
+    if (timeKey === 'ath') return (value === null || value === undefined) ? '' : 'price-up';
+    return pctClass(value);
+  }
 
   // Which period backs both the Change/% Change columns and the ranking --
   // driven by the Time dropdown, mirroring top-losers.html.
@@ -296,8 +304,8 @@
       return '<tr>' +
         '<td>' + r.symbol + '</td>' +
         '<td>' + (r.ltp !== null && r.ltp !== undefined ? fmtNum(r.ltp) : '—') + '</td>' +
-        '<td class="' + pctClass(change) + '">' + (change !== null ? (change > 0 ? '+' : '') + fmtNum(change) : '—') + '</td>' +
-        '<td class="' + pctClass(pct) + '">' + fmtPct(pct) + '</td>' +
+        '<td class="' + rowColorClass(change) + '">' + (change !== null ? (change > 0 ? '+' : '') + fmtNum(change) : '—') + '</td>' +
+        '<td class="' + rowColorClass(pct) + '">' + fmtPct(pct) + '</td>' +
         '</tr>';
     }).join('');
   }

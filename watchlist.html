@@ -47,7 +47,7 @@
   .connect-btn.connected{background:#1c1c1c;color:#ff4d4f;border:1px solid #262626}
   .connect-btn.connected:hover{background:rgba(255,77,79,.12)}
 
-  main{padding:32px 0 64px}
+  main{padding:20px 0}
 
   .grid-toolbar{margin-bottom:16px}
   .search-wrap{position:relative;width:280px}
@@ -78,6 +78,8 @@
     background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
   }
   .grid-scroll{overflow:auto;max-height:calc(100vh - 220px)}
+  .grid-scroll,.chain-scroll{scrollbar-width:none;-ms-overflow-style:none}
+  .grid-scroll::-webkit-scrollbar,.chain-scroll::-webkit-scrollbar{display:none}
   table{width:100%;border-collapse:collapse;min-width:560px}
   thead th{
     position:sticky;top:0;z-index:1;
@@ -191,6 +193,30 @@
     .wl-columns{flex-direction:column}
     .wl-left{flex-basis:auto;width:100%}
     .wl-right{width:100%}
+  }
+
+  /* ---------- fit-to-screen desktop layout ----------
+     Below 1000px the panels stack and the page scrolls normally (rule
+     block above). At desktop widths, instead fit both panels to the
+     viewport with a 20px gap and no outer page scroll -- only each
+     panel's own internal list/table scrolls. */
+  @media (min-width:1000.01px){
+    html,body{height:100%}
+    body{height:100vh;overflow:hidden;display:flex;flex-direction:column}
+    .navbar{flex:0 0 auto}
+    main{flex:1 1 auto;min-height:0;display:flex}
+    main .wrap{flex:1;display:flex;flex-direction:column;min-height:0}
+    .wl-columns{flex:1;min-height:0;align-items:stretch}
+    .wl-left{display:flex;flex-direction:column;min-height:0}
+    .grid-card{display:flex;flex-direction:column;flex:1;min-height:0}
+    .grid-scroll{flex:1;min-height:0;max-height:none}
+    .wl-right{display:flex;flex-direction:column;min-height:0}
+    .chain-panel{display:flex;flex-direction:column;flex:1;min-height:0}
+    .chain-empty{flex:1;display:flex;align-items:center;justify-content:center}
+    .chain-empty[hidden]{display:none}
+    #chainContent{flex:1;display:flex;flex-direction:column;min-height:0}
+    #chainContent[hidden]{display:none}
+    .chain-scroll{flex:1;min-height:0;max-height:none}
   }
 </style>
 </head>
@@ -454,7 +480,7 @@
     }
     fetch('/api/fyers/quotes')
       .then(function(res){
-        if (res.status !== 401) markBrokerConnected();
+        if (res.status === 401) markBrokerDisconnected(); else markBrokerConnected();
         return res.json();
       })
       .then(function(body){
@@ -582,7 +608,7 @@
       (selectedExpiry ? '&expiry=' + encodeURIComponent(selectedExpiry) : '');
     fetch(url)
       .then(function(res){
-        if (res.status !== 401) markBrokerConnected();
+        if (res.status === 401) markBrokerDisconnected(); else markBrokerConnected();
         return res.json();
       })
       .then(function(body){

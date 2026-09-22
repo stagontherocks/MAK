@@ -1,4 +1,5 @@
 const { getInstrumentMap } = require('./_contracts');
+const { getMcxInstrumentMap } = require('./_mcx_contracts');
 const { computeDelta } = require('./_blackscholes');
 
 const OPTION_CHAIN_URL = 'https://api-t1.fyers.in/data/options-chain-v3';
@@ -67,13 +68,29 @@ module.exports = async (req, res) => {
 
   try {
     const instrumentMap = await getInstrumentMap();
-    const instrument = instrumentMap[symbol];
-    if (!instrument) {
+    let underlyingSymbol = instrumentMap[symbol] && instrumentMap[symbol].spotSymbol;
+
+    // MCX commodities have no equity spot instrument -- their options are
+    // written on the futures contract itself, so the front-month future
+    // stands in as the "underlying" symbol for the option-chain request,
+    // same substitution mcx-quotes.js/trading.html already make for LTP.
+    // NOTE: Fyers' own community has reported MCX option chains sometimes
+    // not populating via this endpoint even with a correct symbol -- this
+    // is a best-effort resolution, not a guarantee their side supports it.
+    if (!underlyingSymbol) {
+      const mcxMap = await getMcxInstrumentMap();
+      const mcxInstrument = mcxMap[symbol];
+      if (mcxInstrument && mcxInstrument.futures[0]) {
+        underlyingSymbol = mcxInstrument.futures[0].symbol;
+      }
+    }
+
+    if (!underlyingSymbol) {
       res.status(404).json({ error: 'unknown_symbol' });
       return;
     }
 
-    let url = `${OPTION_CHAIN_URL}?symbol=${encodeURIComponent(instrument.spotSymbol)}&strikecount=${STRIKE_COUNT}`;
+    let url = `${OPTION_CHAIN_URL}?symbol=${encodeURIComponent(underlyingSymbol)}&strikecount=${STRIKE_COUNT}`;
     if (expiryParam) url += `&timestamp=${encodeURIComponent(expiryParam)}`;
 
     const authHeader = `${appId}:${accessToken}`;
@@ -85,6 +102,16 @@ module.exports = async (req, res) => {
 
     const data = body.data;
     const { underlying, rows } = splitRows(data.optionsChain || []);
+
+    // Fyers' own community has reported option chains sometimes coming
+    // back empty for MCX commodities even with a valid symbol -- surface
+    // that distinctly so the UI can say so, rather than rendering a
+    // silently-empty table that looks broken.
+    if (rows.length === 0) {
+      res.status(502).json({ error: 'no_chain_data', message: 'Fyers returned no option-chain data for this symbol.' });
+      return;
+    }
+
     const spot = underlying ? underlying.ltp : null;
     const spotChp = underlying ? underlying.ltpchp : null;
     const future = underlying ? underlying.fp : null;

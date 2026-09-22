@@ -328,7 +328,12 @@
   var WATCHLIST_KEY = 'watchlistSymbols_v1';
   var SELECTED_SYMBOL_KEY = 'watchlistSelectedSymbol_v1';
   var gridBody = document.getElementById('gridBody');
-  var allStocks = []; // [symbol, lot] pairs, F&O universe -- watchlist is scoped to this same universe as the rest of the app
+  // Same hardcoded MCX list as trading.html (MCX_ROWS there) -- these four
+  // have no equity spot instrument, so they're not in fo-stocks.json and
+  // need mcx-quotes.js instead of quotes.js for pricing (see pollQuotes).
+  var MCX_ROWS = [['CRUDEOIL', 100], ['NATURALGAS', 1250], ['GOLDM', 10], ['SILVERM', 5]];
+  var MCX_SYMBOL_SET = new Set(MCX_ROWS.map(function(r){ return r[0]; }));
+  var allStocks = []; // [symbol, lot] pairs, F&O + MCX universe -- watchlist is scoped to this same universe as the rest of the app
   var lotBySymbol = {};
   var watchlist = [];  // ordered list of symbols, persisted
   var lastQuotes = {}; // symbol -> {ltp, chp}
@@ -473,24 +478,48 @@
   // polling continuously can exceed it. Fine for occasional side-by-side
   // use; revisit with shared cross-tab polling if that becomes a problem.
   var QUOTE_POLL_MS = 6000;
+  function fetchJsonSafe(url){
+    return fetch(url)
+      .then(function(res){ return res.json().then(function(body){ return { status: res.status, body: body }; }); })
+      .catch(function(){ return null; });
+  }
   function pollQuotes(){
     if (watchlist.length === 0) {
       setTimeout(pollQuotes, QUOTE_POLL_MS);
       return;
     }
-    fetch('/api/fyers/quotes')
-      .then(function(res){
-        if (res.status === 401) markBrokerDisconnected(); else markBrokerConnected();
-        return res.json();
-      })
-      .then(function(body){
-        if (body && body.quotes) {
-          lastQuotes = body.quotes;
-          renderGrid();
-        }
-      })
-      .catch(function(){ /* keep last known values on transient network errors */ })
-      .then(function(){ setTimeout(pollQuotes, QUOTE_POLL_MS); });
+    // MCX symbols (CRUDEOIL etc.) have no equity spot and aren't covered by
+    // /api/fyers/quotes -- only fetch mcx-quotes.js when the watchlist
+    // actually needs it, to avoid a wasted request every poll otherwise.
+    var needsMcx = watchlist.some(function(s){ return MCX_SYMBOL_SET.has(s); });
+    var requests = [fetchJsonSafe('/api/fyers/quotes')];
+    if (needsMcx) requests.push(fetchJsonSafe('/api/fyers/mcx-quotes'));
+
+    Promise.all(requests).then(function(results){
+      var nfoResult = results[0];
+      if (nfoResult) {
+        if (nfoResult.status === 401) markBrokerDisconnected(); else markBrokerConnected();
+      }
+      var merged = {};
+      if (nfoResult && nfoResult.body && nfoResult.body.quotes) {
+        Object.assign(merged, nfoResult.body.quotes);
+      }
+      var mcxResult = results[1];
+      if (mcxResult && mcxResult.body && mcxResult.body.quotes) {
+        // No separate spot instrument for MCX -- the front (nearest-expiry)
+        // future stands in for LTP, same substitution trading.html makes.
+        Object.keys(mcxResult.body.quotes).forEach(function(sym){
+          var q = mcxResult.body.quotes[sym];
+          var frontFuture = q.futures && q.futures[0];
+          merged[sym] = {
+            ltp: (frontFuture !== null && frontFuture !== undefined) ? frontFuture : null,
+            chp: q.chp !== undefined ? q.chp : null,
+          };
+        });
+      }
+      lastQuotes = merged;
+      renderGrid();
+    }).then(function(){ setTimeout(pollQuotes, QUOTE_POLL_MS); });
   }
 
   // ---------- Option-chain panel ----------
@@ -506,6 +535,7 @@
 
   var CHAIN_TAB_COUNT = 4; // matches the reference design: a handful of tabs + an overflow dropdown for the rest
   var chainData = null;    // last fetched /api/fyers/option-chain response
+  var chainError = null;   // set only when there's no chainData to fall back to -- see fetchChain
   var selectedExpiry = null;
   var chainFetchToken = 0;      // guards against a slow, stale fetch clobbering a newer selection's render
   var chainNeedsScrollToAtm = true; // scroll to the ATM row on a fresh symbol/expiry load, not on every 6s poll refresh
@@ -516,6 +546,7 @@
     try { localStorage.setItem(SELECTED_SYMBOL_KEY, symbol || ''); } catch (err) {}
     selectedExpiry = null;
     chainData = null;
+    chainError = null;
     chainNeedsScrollToAtm = true;
     renderGrid();
     fetchChain();
@@ -527,7 +558,14 @@
   }
 
   function renderChain(){
-    if (!selectedSymbol || !chainData) {
+    if (!selectedSymbol || (!chainData && !chainError)) {
+      chainEmpty.textContent = 'Select a stock from your watchlist to view its option chain.';
+      chainEmpty.hidden = false;
+      chainContent.hidden = true;
+      return;
+    }
+    if (!chainData && chainError) {
+      chainEmpty.textContent = chainError;
       chainEmpty.hidden = false;
       chainContent.hidden = true;
       return;
@@ -610,6 +648,7 @@
   function fetchChain(){
     if (!selectedSymbol) {
       chainData = null;
+      chainError = null;
       renderChain();
       return;
     }
@@ -619,17 +658,29 @@
     fetch(url)
       .then(function(res){
         if (res.status === 401) markBrokerDisconnected(); else markBrokerConnected();
-        return res.json();
+        return res.json().then(function(body){ return { ok: res.ok, body: body }; });
       })
-      .then(function(body){
+      .then(function(result){
         if (token !== chainFetchToken) return; // a newer selection/expiry superseded this fetch
-        if (body && body.status === 'ok') {
-          chainData = body;
-          if (!selectedExpiry) selectedExpiry = body.selectedExpiry;
+        if (result.ok && result.body && result.body.status === 'ok') {
+          chainData = result.body;
+          chainError = null;
+          if (!selectedExpiry) selectedExpiry = result.body.selectedExpiry;
+          renderChain();
+        } else if (!chainData) {
+          // Only surface an error when there's no already-working chain to
+          // keep showing -- a poll hiccup on a loaded chain just silently
+          // keeps the last known data (see the catch below too).
+          chainError = (result.body && result.body.message) || 'Could not load the option chain for this symbol.';
           renderChain();
         }
       })
-      .catch(function(){ /* keep last known chain on transient network errors */ });
+      .catch(function(){
+        if (!chainData && token === chainFetchToken) {
+          chainError = 'Could not load the option chain for this symbol.';
+          renderChain();
+        }
+      });
   }
 
   var CHAIN_POLL_MS = 6000;
@@ -651,7 +702,7 @@
 
   fetch('source/fo-stocks.json')
     .then(function(res){ return res.json(); })
-    .then(function(stocks){ allStocks = stocks; })
+    .then(function(stocks){ allStocks = stocks.concat(MCX_ROWS); })
     .catch(function(){ /* search box just won't return suggestions until this loads */ });
 </script>
 </body>

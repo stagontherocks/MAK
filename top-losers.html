@@ -52,17 +52,15 @@
   .grid-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap;row-gap:12px}
   .grid-toolbar-left{display:flex;align-items:center;gap:16px;flex-wrap:wrap;row-gap:12px}
   .toolbar-divider{width:1px;height:24px;background:#262626;flex-shrink:0}
-  .magnitude-toggle{
-    display:flex;align-items:center;background:#1a1a1a;border:1px solid #262626;
-    border-radius:999px;padding:3px;gap:2px;flex-shrink:0;
+  .select-input{
+    background:#161616 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23787878" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>') no-repeat right 12px center/14px;
+    border:1px solid #262626;color:#eeeeee;
+    font-family:inherit;font-size:13px;font-weight:600;
+    padding:9px 32px 9px 14px;border-radius:8px;
+    appearance:none;-webkit-appearance:none;cursor:pointer;flex-shrink:0;
   }
-  .magnitude-btn{
-    border:none;background:transparent;color:#787878;font-size:12px;font-weight:700;
-    letter-spacing:.02em;padding:7px 14px;border-radius:999px;cursor:pointer;
-    font-family:inherit;transition:background .15s ease,color .15s ease;
-  }
-  .magnitude-btn:hover{color:#c2c2c2}
-  .magnitude-btn.active{background:rgba(255,77,79,.15);color:#ff4d4f}
+  .select-input:hover{border-color:#3a3a3a}
+  .select-input:focus{outline:none;border-color:#4a4a4a}
   .search-wrap{position:relative;width:220px}
   .search-input{
     background:#161616 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23787878" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') no-repeat 14px center/14px;
@@ -98,7 +96,7 @@
     background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
   }
   .grid-scroll{overflow:auto;max-height:calc(100vh - 220px)}
-  table{width:100%;border-collapse:collapse;min-width:720px}
+  table{width:100%;border-collapse:collapse;min-width:560px}
   thead th{
     position:sticky;top:0;z-index:1;
     background:#1a1a1a;
@@ -146,14 +144,20 @@
           <button type="button" class="search-clear" id="stockSearchClear" aria-label="Clear search" hidden>&times;</button>
         </div>
         <div class="toolbar-divider"></div>
-        <div class="magnitude-toggle" id="magnitudeToggle">
-          <button type="button" class="magnitude-btn active" data-threshold="0">All</button>
-          <button type="button" class="magnitude-btn" data-threshold="5">&lt;-5%</button>
-          <button type="button" class="magnitude-btn" data-threshold="10">&lt;-10%</button>
-          <button type="button" class="magnitude-btn" data-threshold="15">&lt;-15%</button>
-          <button type="button" class="magnitude-btn" data-threshold="20">&lt;-20%</button>
-          <button type="button" class="magnitude-btn" data-threshold="30">&lt;-30%</button>
-        </div>
+        <select class="select-input" id="timeFilter" aria-label="Time period">
+          <option value="d1" selected>Today</option>
+          <option value="m1">1 Month</option>
+          <option value="m3">3 Months</option>
+          <option value="m6">6 Months</option>
+        </select>
+        <select class="select-input" id="magnitudeFilter" aria-label="Minimum decline">
+          <option value="0" selected>All</option>
+          <option value="5">&lt;-5%</option>
+          <option value="10">&lt;-10%</option>
+          <option value="15">&lt;-15%</option>
+          <option value="20">&lt;-20%</option>
+          <option value="30">&lt;-30%</option>
+        </select>
       </div>
       <div class="toolbar-right">
         <div class="screener-status" id="screenerStatus">Starting scan...</div>
@@ -167,11 +171,8 @@
             <tr>
               <th>Stock Name</th>
               <th class="sortable" id="thLtp">LTP</th>
-              <th class="sortable" id="thD1">% Chg</th>
-              <th>Lot Size</th>
-              <th class="sortable" id="thM1">1M</th>
-              <th class="sortable" id="thM3">3M</th>
-              <th class="sortable" id="thM6">6M</th>
+              <th class="sortable" id="thChg">Change</th>
+              <th class="sortable" id="thPct">% Change</th>
             </tr>
           </thead>
           <tbody id="gridBody"></tbody>
@@ -232,6 +233,9 @@
     try { localStorage.removeItem(CACHE_KEY); } catch (err) {}
   }
 
+  function fmtNum(value){
+    return value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  }
   function fmtPct(value){
     if (value === null || value === undefined) return '—';
     return (value > 0 ? '+' : '') + value.toFixed(2) + '%';
@@ -241,19 +245,29 @@
     return value > 0 ? 'price-up' : (value < 0 ? 'price-down' : '');
   }
 
+  // Which period backs both the Change/% Change columns and the ranking --
+  // driven by the Time dropdown, not fixed to 1-day like top-gainers.html.
+  var timeKey = 'd1';
+  // Fyers gives us ltp + % change per period; derive the absolute rupee
+  // change from those two (same technique as watchlist.html) rather than
+  // needing the backend to also return per-period rupee deltas.
+  function changeFor(r){
+    var pct = r[timeKey];
+    if (r.ltp === null || r.ltp === undefined || pct === null || pct === undefined) return null;
+    return r.ltp - r.ltp / (1 + pct / 100);
+  }
+
   // Single-column sort, 3-state cycle (asc -> desc -> unsorted), same model
-  // as trading.html's profit-column sort. Defaults to % Chg (1 day)
-  // ascending on load (biggest losers first) since this is a Top Losers
-  // screen -- the mirror image of top-gainers.html's default.
+  // as trading.html's profit-column sort. Defaults to % Change ascending on
+  // load (biggest losers first for the selected period) -- the mirror image
+  // of top-gainers.html's default.
   var SORT_VALUE_GETTERS = {
     ltp: function(r){ return r.ltp; },
-    d1: function(r){ return r.d1; },
-    m1: function(r){ return r.m1; },
-    m3: function(r){ return r.m3; },
-    m6: function(r){ return r.m6; }
+    chg: changeFor,
+    pct: function(r){ return r[timeKey]; }
   };
-  var sortState = { column: 'd1', direction: 'asc' };
-  var sortHeaderIds = ['thLtp', 'thD1', 'thM1', 'thM3', 'thM6'];
+  var sortState = { column: 'pct', direction: 'asc' };
+  var sortHeaderIds = ['thLtp', 'thChg', 'thPct'];
 
   function sortedRows(){
     var getValue = SORT_VALUE_GETTERS[sortState.column];
@@ -268,8 +282,9 @@
 
   function passesMagnitudeFilter(r){
     if (magnitudeThreshold === 0) return true;
-    if (r.d1 === null || r.d1 === undefined) return false;
-    return r.d1 < -magnitudeThreshold;
+    var pct = r[timeKey];
+    if (pct === null || pct === undefined) return false;
+    return pct < -magnitudeThreshold;
   }
 
   function renderRows(){
@@ -278,14 +293,13 @@
       return r.symbol.indexOf(term) !== -1 && passesMagnitudeFilter(r);
     });
     gridBody.innerHTML = visible.map(function(r){
+      var pct = r[timeKey];
+      var change = changeFor(r);
       return '<tr>' +
         '<td>' + r.symbol + '</td>' +
-        '<td>' + (r.ltp !== null && r.ltp !== undefined ? r.ltp.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—') + '</td>' +
-        '<td class="' + pctClass(r.d1) + '">' + fmtPct(r.d1) + '</td>' +
-        '<td>' + r.lot.toLocaleString('en-IN') + '</td>' +
-        '<td class="' + pctClass(r.m1) + '">' + fmtPct(r.m1) + '</td>' +
-        '<td class="' + pctClass(r.m3) + '">' + fmtPct(r.m3) + '</td>' +
-        '<td class="' + pctClass(r.m6) + '">' + fmtPct(r.m6) + '</td>' +
+        '<td>' + (r.ltp !== null && r.ltp !== undefined ? fmtNum(r.ltp) : '—') + '</td>' +
+        '<td class="' + pctClass(change) + '">' + (change !== null ? (change > 0 ? '+' : '') + fmtNum(change) : '—') + '</td>' +
+        '<td class="' + pctClass(pct) + '">' + fmtPct(pct) + '</td>' +
         '</tr>';
     }).join('');
   }
@@ -310,11 +324,9 @@
     });
   }
   bindSortHeader('thLtp', 'ltp');
-  bindSortHeader('thD1', 'd1');
-  bindSortHeader('thM1', 'm1');
-  bindSortHeader('thM3', 'm3');
-  bindSortHeader('thM6', 'm6');
-  document.getElementById('thD1').classList.add('sort-asc');
+  bindSortHeader('thChg', 'chg');
+  bindSortHeader('thPct', 'pct');
+  document.getElementById('thPct').classList.add('sort-asc');
 
   var searchInput = document.getElementById('stockSearch');
   var searchClear = document.getElementById('stockSearchClear');
@@ -329,15 +341,16 @@
     searchInput.focus();
   });
 
-  var magnitudeToggle = document.getElementById('magnitudeToggle');
+  var timeSelect = document.getElementById('timeFilter');
+  timeSelect.addEventListener('change', function(){
+    timeKey = timeSelect.value;
+    renderRows();
+  });
+
+  var magnitudeSelect = document.getElementById('magnitudeFilter');
   var magnitudeThreshold = 0;
-  magnitudeToggle.addEventListener('click', function(e){
-    var btn = e.target.closest('.magnitude-btn');
-    if (!btn) return;
-    magnitudeThreshold = Number(btn.getAttribute('data-threshold'));
-    var buttons = magnitudeToggle.querySelectorAll('.magnitude-btn');
-    for (var i = 0; i < buttons.length; i++) buttons[i].classList.remove('active');
-    btn.classList.add('active');
+  magnitudeSelect.addEventListener('change', function(){
+    magnitudeThreshold = Number(magnitudeSelect.value);
     renderRows();
   });
 

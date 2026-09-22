@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watchlist — GrabMyStone</title>
+<link rel="icon" href="images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:#111111;color:#eeeeee;
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+
+  .navbar{
+    position:sticky;top:0;z-index:100;
+    background:#111111;border-bottom:1px solid #262626;
+  }
+  .navbar .wrap{
+    height:58px;display:flex;align-items:center;justify-content:space-between;gap:24px;
+  }
+  .nav-links{display:flex;align-items:center;gap:8px}
+  .nav-links a{
+    padding:10px 16px;border-radius:999px;font-weight:600;font-size:13px;
+    color:#c2c2c2;text-decoration:none;transition:background .15s ease,color .15s ease;
+  }
+  .nav-links a:hover{background:#1c1c1c;color:#ffffff}
+  .nav-links a.up{color:#2ecc71}
+  .nav-links a.up:hover{background:rgba(46,204,113,.12)}
+  .nav-links a.down{color:#ff4d4f}
+  .nav-links a.down:hover{background:rgba(255,77,79,.12)}
+  .nav-links a.active{background:#1c1c1c;color:#ffffff}
+  .nav-links a.down.active{background:rgba(255,77,79,.15);color:#ff4d4f}
+  .nav-links a.up.active{background:rgba(46,204,113,.15);color:#2ecc71}
+
+  .connect-btn{
+    display:inline-flex;align-items:center;padding:9px 16px;border-radius:8px;
+    background:#2ecc71;color:#0d1f14;font-size:13px;font-weight:700;text-decoration:none;
+    transition:background .15s ease;
+  }
+  .connect-btn:hover{background:#3ee082}
+  .connect-btn.connected{background:#1c1c1c;color:#ff4d4f;border:1px solid #262626}
+  .connect-btn.connected:hover{background:rgba(255,77,79,.12)}
+
+  main{padding:32px 0 64px}
+
+  .grid-toolbar{margin-bottom:16px}
+  .search-wrap{position:relative;width:280px}
+  .search-input{
+    background:#161616 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23787878" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') no-repeat 14px center/14px;
+    border:1px solid #262626;color:#eeeeee;
+    font-family:inherit;font-size:13px;font-weight:600;
+    padding:9px 16px 9px 38px;border-radius:8px;
+    width:100%;
+  }
+  .search-input::placeholder{color:#787878;font-weight:500}
+  .search-input:hover{border-color:#3a3a3a}
+  .search-input:focus{outline:none;border-color:#4a4a4a}
+  .search-suggestions{
+    position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:10;
+    background:#1a1a1a;border:1px solid #262626;border-radius:8px;overflow:hidden;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);
+  }
+  .search-suggestions[hidden]{display:none}
+  .suggestion{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:10px 14px;font-size:13px;font-weight:600;color:#eeeeee;cursor:pointer;
+  }
+  .suggestion:hover,.suggestion.highlighted{background:#262626}
+  .suggestion .lot{color:#787878;font-weight:500;font-size:12px}
+
+  .grid-card{
+    background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
+  }
+  .grid-scroll{overflow:auto;max-height:calc(100vh - 220px)}
+  table{width:100%;border-collapse:collapse;min-width:560px}
+  thead th{
+    position:sticky;top:0;z-index:1;
+    background:#1a1a1a;
+    text-align:right;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:#787878;padding:12px 16px;border-bottom:1px solid #262626;white-space:nowrap;
+  }
+  thead th:first-child{text-align:left}
+  thead th:last-child{width:44px}
+  tbody td{
+    padding:12px 16px;font-size:13px;text-align:right;border-bottom:1px solid #1e1e1e;
+    font-variant-numeric:tabular-nums;color:#eeeeee;white-space:nowrap;
+  }
+  tbody td:first-child{text-align:left;font-weight:700}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover td{background:#1c1c1c}
+  .price-up{color:#2ecc71}
+  .price-down{color:#ff4d4f}
+  .remove-btn{
+    opacity:0;border:none;background:#262626;color:#c2c2c2;width:24px;height:24px;
+    border-radius:999px;cursor:pointer;font-size:14px;line-height:1;
+    display:inline-flex;align-items:center;justify-content:center;
+    transition:opacity .1s ease,background .15s ease,color .15s ease;
+  }
+  tbody tr:hover .remove-btn{opacity:1}
+  .remove-btn:hover{background:rgba(255,77,79,.2);color:#ff4d4f}
+  .empty-state{padding:48px 16px;text-align:center;color:#787878;font-size:13px;font-weight:600}
+</style>
+</head>
+<body>
+
+<header class="navbar">
+  <div class="wrap">
+    <nav class="nav-links">
+      <a href="trading.html">Arbitrage</a>
+      <a href="top-losers.html" class="down">Top Losers</a>
+      <a href="top-gainers.html" class="up">Top Gainers</a>
+      <a href="hiv-stocks.html">High IV</a>
+      <a href="watchlist.html" class="active">Watchlist</a>
+      <a href="#">Positions</a>
+    </nav>
+    <a href="/api/fyers/login" class="connect-btn" id="connectBtn">Connect Broker</a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="grid-toolbar">
+      <div class="search-wrap">
+        <input type="text" class="search-input" id="stockSearch" placeholder="Search stock to add..." aria-label="Search stock to add" autocomplete="off">
+        <div class="search-suggestions" id="searchSuggestions" hidden></div>
+      </div>
+    </div>
+    <div class="grid-card">
+      <div class="grid-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Stock Name</th>
+              <th>LTP</th>
+              <th>Change</th>
+              <th>% Change</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="gridBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  var connectBtn = document.getElementById('connectBtn');
+  function markBrokerConnected(){
+    if (connectBtn.classList.contains('connected')) return;
+    connectBtn.setAttribute('href', '/api/fyers/logout');
+    connectBtn.classList.add('connected');
+    connectBtn.textContent = 'Disconnect';
+  }
+  function markBrokerDisconnected(){
+    connectBtn.setAttribute('href', '/api/fyers/login');
+    connectBtn.classList.remove('connected');
+    connectBtn.textContent = 'Connect Broker';
+  }
+  fetch('/api/fyers/status').then(function(res){ return res.json(); }).then(function(body){
+    if (body && body.loggedIn) markBrokerConnected();
+  }).catch(function(){});
+  connectBtn.addEventListener('click', function(e){
+    if (!connectBtn.classList.contains('connected')) return;
+    e.preventDefault();
+    fetch('/api/fyers/logout').catch(function(){}).then(function(){ markBrokerDisconnected(); });
+  });
+
+  var WATCHLIST_KEY = 'watchlistSymbols_v1';
+  var gridBody = document.getElementById('gridBody');
+  var allStocks = []; // [symbol, lot] pairs, F&O universe -- watchlist is scoped to this same universe as the rest of the app
+  var lotBySymbol = {};
+  var watchlist = [];  // ordered list of symbols, persisted
+  var lastQuotes = {}; // symbol -> {ltp, chp}
+
+  function loadWatchlist(){
+    try {
+      var raw = localStorage.getItem(WATCHLIST_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (err) { return []; }
+  }
+  function saveWatchlist(){
+    try { localStorage.setItem(WATCHLIST_KEY, JSON.stringify(watchlist)); } catch (err) {}
+  }
+
+  function fmtNum(value){
+    return value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  }
+  function pctClass(value){
+    if (value === null || value === undefined) return '';
+    return value > 0 ? 'price-up' : (value < 0 ? 'price-down' : '');
+  }
+
+  function renderGrid(){
+    if (watchlist.length === 0) {
+      gridBody.innerHTML = '';
+      var card = document.querySelector('.grid-card');
+      if (!document.getElementById('emptyState')) {
+        var div = document.createElement('div');
+        div.id = 'emptyState';
+        div.className = 'empty-state';
+        div.textContent = 'Search above to add stocks to your watchlist.';
+        card.appendChild(div);
+      }
+      return;
+    }
+    var existingEmpty = document.getElementById('emptyState');
+    if (existingEmpty) existingEmpty.remove();
+
+    gridBody.innerHTML = watchlist.map(function(symbol){
+      var q = lastQuotes[symbol];
+      var ltp = q && q.ltp !== null && q.ltp !== undefined ? q.ltp : null;
+      var chp = q && q.chp !== null && q.chp !== undefined ? q.chp : null;
+      // Fyers gives us ltp + % change directly; derive the absolute rupee
+      // change from those two rather than needing a separate field/poll.
+      var change = (ltp !== null && chp !== null) ? ltp - ltp / (1 + chp / 100) : null;
+      return '<tr data-symbol="' + symbol + '">' +
+        '<td>' + symbol + '</td>' +
+        '<td>' + (ltp !== null ? fmtNum(ltp) : '—') + '</td>' +
+        '<td class="' + pctClass(change) + '">' + (change !== null ? (change > 0 ? '+' : '') + fmtNum(change) : '—') + '</td>' +
+        '<td class="' + pctClass(chp) + '">' + (chp !== null ? (chp > 0 ? '+' : '') + chp.toFixed(2) + '%' : '—') + '</td>' +
+        '<td><button type="button" class="remove-btn" data-symbol="' + symbol + '" aria-label="Remove ' + symbol + '">&times;</button></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  gridBody.addEventListener('click', function(e){
+    var btn = e.target.closest('.remove-btn');
+    if (!btn) return;
+    var symbol = btn.getAttribute('data-symbol');
+    watchlist = watchlist.filter(function(s){ return s !== symbol; });
+    saveWatchlist();
+    renderGrid();
+  });
+
+  function addSymbol(symbol){
+    if (watchlist.indexOf(symbol) !== -1) return;
+    watchlist.push(symbol);
+    saveWatchlist();
+    renderGrid();
+  }
+
+  // Typeahead: type to search the F&O universe, click (or Enter) a
+  // suggestion to add it. Already-watchlisted symbols are excluded from
+  // suggestions since there's nothing more to do with them here.
+  var searchInput = document.getElementById('stockSearch');
+  var suggestionsEl = document.getElementById('searchSuggestions');
+  var currentMatches = [];
+
+  function renderSuggestions(){
+    var term = searchInput.value.trim().toUpperCase();
+    if (!term) {
+      suggestionsEl.hidden = true;
+      currentMatches = [];
+      return;
+    }
+    currentMatches = allStocks
+      .filter(function(s){ return s[0].indexOf(term) !== -1 && watchlist.indexOf(s[0]) === -1; })
+      .slice(0, 8);
+    if (currentMatches.length === 0) {
+      suggestionsEl.hidden = true;
+      return;
+    }
+    suggestionsEl.innerHTML = currentMatches.map(function(s){
+      return '<div class="suggestion" data-symbol="' + s[0] + '">' +
+        '<span>' + s[0] + '</span><span class="lot">Lot ' + s[1].toLocaleString('en-IN') + '</span>' +
+        '</div>';
+    }).join('');
+    suggestionsEl.hidden = false;
+  }
+
+  searchInput.addEventListener('input', renderSuggestions);
+  searchInput.addEventListener('keydown', function(e){
+    if (e.key === 'Enter' && currentMatches.length > 0) {
+      addSymbol(currentMatches[0][0]);
+      searchInput.value = '';
+      suggestionsEl.hidden = true;
+      currentMatches = [];
+    } else if (e.key === 'Escape') {
+      suggestionsEl.hidden = true;
+    }
+  });
+  suggestionsEl.addEventListener('click', function(e){
+    var row = e.target.closest('.suggestion');
+    if (!row) return;
+    addSymbol(row.getAttribute('data-symbol'));
+    searchInput.value = '';
+    suggestionsEl.hidden = true;
+    currentMatches = [];
+    searchInput.focus();
+  });
+  document.addEventListener('click', function(e){
+    if (!e.target.closest('.search-wrap')) suggestionsEl.hidden = true;
+  });
+
+  // Reuses the same /api/fyers/quotes endpoint trading.html polls -- it
+  // already covers the full F&O universe every 6s, so no new backend
+  // endpoint is needed here, just client-side filtering down to the
+  // watchlisted symbols. NOTE: if trading.html and watchlist.html are both
+  // left open at once, their polls run independently and stack -- see
+  // mak_live_quotes_status: a single tab's 6s poll is already tuned to
+  // Fyers' 200 req/min cap with limited headroom, so two concurrent tabs
+  // polling continuously can exceed it. Fine for occasional side-by-side
+  // use; revisit with shared cross-tab polling if that becomes a problem.
+  var QUOTE_POLL_MS = 6000;
+  function pollQuotes(){
+    if (watchlist.length === 0) {
+      setTimeout(pollQuotes, QUOTE_POLL_MS);
+      return;
+    }
+    fetch('/api/fyers/quotes')
+      .then(function(res){
+        if (res.status !== 401) markBrokerConnected();
+        return res.json();
+      })
+      .then(function(body){
+        if (body && body.quotes) {
+          lastQuotes = body.quotes;
+          renderGrid();
+        }
+      })
+      .catch(function(){ /* keep last known values on transient network errors */ })
+      .then(function(){ setTimeout(pollQuotes, QUOTE_POLL_MS); });
+  }
+
+  watchlist = loadWatchlist();
+  renderGrid();
+  pollQuotes();
+
+  fetch('source/fo-stocks.json')
+    .then(function(res){ return res.json(); })
+    .then(function(stocks){ allStocks = stocks; })
+    .catch(function(){ /* search box just won't return suggestions until this loads */ });
+</script>
+</body>
+</html>

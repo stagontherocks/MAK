@@ -94,6 +94,9 @@
   tbody td:first-child{text-align:left;font-weight:700}
   tbody tr:last-child td{border-bottom:none}
   tbody tr:hover td{background:#1c1c1c}
+  tbody tr{cursor:pointer}
+  tbody tr.row-selected td{background:#1c1c1c}
+  tbody tr.row-selected td:first-child{box-shadow:inset 3px 0 0 #4a90ff}
   .price-up{color:#2ecc71}
   .price-down{color:#ff4d4f}
   .remove-btn{
@@ -105,6 +108,90 @@
   tbody tr:hover .remove-btn{opacity:1}
   .remove-btn:hover{background:rgba(255,77,79,.2);color:#ff4d4f}
   .empty-state{padding:48px 16px;text-align:center;color:#787878;font-size:13px;font-weight:600}
+
+  /* ---------- two-column layout ---------- */
+  .wl-columns{display:flex;align-items:flex-start;gap:20px}
+  .wl-left{flex:0 0 400px;min-width:0}
+  .wl-right{flex:1 1 auto;min-width:0}
+  /* the left column is narrower than the original single-column layout this
+     table was designed for -- drop the wide min-width and tighten padding
+     so 4 columns + remove button fit without forcing horizontal scroll */
+  .wl-left .search-wrap{width:100%}
+  .wl-left table{min-width:0}
+  .wl-left thead th{padding:12px 10px}
+  .wl-left tbody td{padding:12px 10px;font-size:12.5px}
+
+  /* ---------- option-chain panel ---------- */
+  .chain-panel{
+    background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
+    min-height:400px;
+  }
+  .chain-empty{padding:48px 16px;text-align:center;color:#787878;font-size:13px;font-weight:600}
+
+  .chain-topstrip{
+    display:flex;align-items:center;gap:16px;padding:14px 18px;border-bottom:1px solid #262626;
+    flex-wrap:wrap;
+  }
+  .ts-item{display:flex;align-items:baseline;gap:8px}
+  .ts-label{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#787878}
+  .ts-value{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+  .ts-sep{width:1px;height:16px;background:#262626}
+
+  .chain-expiries{
+    display:flex;align-items:center;gap:8px;padding:12px 18px;border-bottom:1px solid #262626;
+    position:relative;
+  }
+  .expiry-tab{
+    padding:8px 14px;border-radius:8px;border:1px solid #262626;background:#1a1a1a;
+    color:#c2c2c2;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;
+  }
+  .expiry-tab:hover{border-color:#3a3a3a}
+  .expiry-tab.active{border-color:#4a90ff;color:#4a90ff;background:rgba(74,144,255,.1)}
+  .expiry-more-btn{
+    padding:8px 10px;border-radius:8px;border:1px solid #262626;background:#1a1a1a;
+    color:#c2c2c2;font-size:12px;cursor:pointer;
+  }
+  .expiry-more-btn:hover{border-color:#3a3a3a}
+  .expiry-dropdown{
+    position:absolute;top:calc(100% + 6px);right:18px;z-index:10;
+    background:#1a1a1a;border:1px solid #262626;border-radius:8px;overflow:hidden;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);min-width:160px;max-height:280px;overflow-y:auto;
+  }
+  .expiry-dropdown[hidden]{display:none}
+  .expiry-option{padding:10px 14px;font-size:13px;font-weight:600;color:#eeeeee;cursor:pointer;white-space:nowrap}
+  .expiry-option:hover,.expiry-option.active{background:#262626}
+
+  .chain-scroll{overflow:auto;max-height:calc(100vh - 320px)}
+  .chain-table{width:100%;border-collapse:collapse;min-width:640px}
+  .chain-table thead th{
+    position:sticky;top:0;z-index:1;background:#1a1a1a;
+    font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#787878;
+    padding:10px 12px;border-bottom:1px solid #262626;white-space:nowrap;text-align:right;
+  }
+  .chain-table thead th.col-strike{text-align:center}
+  .chain-table tbody td{
+    padding:9px 12px;font-size:13px;text-align:right;border-bottom:1px solid #1e1e1e;
+    font-variant-numeric:tabular-nums;color:#eeeeee;white-space:nowrap;position:relative;
+  }
+  .chain-table tbody tr:last-child td{border-bottom:none}
+  .cell-strike{
+    text-align:center !important;font-weight:700;background:#1a1a1a;
+    border-left:1px solid #262626;border-right:1px solid #262626;
+  }
+  .chain-table tbody tr.atm-row .cell-strike{background:rgba(74,144,255,.18);color:#4a90ff}
+  .chain-table tbody tr.atm-row td{background-color:rgba(74,144,255,.06)}
+  .cell-itm{background-color:rgba(255,214,64,.08)}
+  .cell-oi{overflow:hidden}
+  .cell-oi-call{background-image:linear-gradient(to left, rgba(46,204,113,.25) var(--pct,0%), transparent var(--pct,0%))}
+  .cell-oi-put{background-image:linear-gradient(to right, rgba(255,77,79,.25) var(--pct,0%), transparent var(--pct,0%))}
+  .delta-call{color:#2ecc71}
+  .delta-put{color:#ff4d4f}
+
+  @media (max-width:1000px){
+    .wl-columns{flex-direction:column}
+    .wl-left{flex-basis:auto;width:100%}
+    .wl-right{width:100%}
+  }
 </style>
 </head>
 <body>
@@ -125,26 +212,66 @@
 
 <main>
   <div class="wrap">
-    <div class="grid-toolbar">
-      <div class="search-wrap">
-        <input type="text" class="search-input" id="stockSearch" placeholder="Search stock to add..." aria-label="Search stock to add" autocomplete="off">
-        <div class="search-suggestions" id="searchSuggestions" hidden></div>
+    <div class="wl-columns">
+      <div class="wl-left">
+        <div class="grid-toolbar">
+          <div class="search-wrap">
+            <input type="text" class="search-input" id="stockSearch" placeholder="Search stock to add..." aria-label="Search stock to add" autocomplete="off">
+            <div class="search-suggestions" id="searchSuggestions" hidden></div>
+          </div>
+        </div>
+        <div class="grid-card">
+          <div class="grid-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Stock Name</th>
+                  <th>LTP</th>
+                  <th>Change</th>
+                  <th>% Change</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="gridBody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="grid-card">
-      <div class="grid-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Stock Name</th>
-              <th>LTP</th>
-              <th>Change</th>
-              <th>% Change</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="gridBody"></tbody>
-        </table>
+
+      <div class="wl-right">
+        <div class="chain-panel" id="chainPanel">
+          <div class="chain-empty" id="chainEmpty">Select a stock from your watchlist to view its option chain.</div>
+          <div id="chainContent" hidden>
+            <div class="chain-topstrip">
+              <div class="ts-item"><span class="ts-label">Spot</span><span class="ts-value" id="tsSpot">—</span></div>
+              <div class="ts-sep"></div>
+              <div class="ts-item"><span class="ts-label">VIX</span><span class="ts-value" id="tsVix">—</span></div>
+              <div class="ts-sep"></div>
+              <div class="ts-item"><span class="ts-label">Fut</span><span class="ts-value" id="tsFut">—</span></div>
+            </div>
+            <div class="chain-expiries" id="chainExpiries">
+              <div id="expiryTabs" style="display:flex;gap:8px;flex-wrap:wrap;flex:1"></div>
+              <button type="button" class="expiry-more-btn" id="expiryMoreBtn">▾</button>
+              <div class="expiry-dropdown" id="expiryDropdown" hidden></div>
+            </div>
+            <div class="chain-scroll">
+              <table class="chain-table">
+                <thead>
+                  <tr>
+                    <th class="col-delta">Call Δ</th>
+                    <th>LTP</th>
+                    <th>OI</th>
+                    <th class="col-strike">Strike</th>
+                    <th>OI</th>
+                    <th>LTP</th>
+                    <th class="col-delta">Put Δ</th>
+                  </tr>
+                </thead>
+                <tbody id="chainBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -173,11 +300,13 @@
   });
 
   var WATCHLIST_KEY = 'watchlistSymbols_v1';
+  var SELECTED_SYMBOL_KEY = 'watchlistSelectedSymbol_v1';
   var gridBody = document.getElementById('gridBody');
   var allStocks = []; // [symbol, lot] pairs, F&O universe -- watchlist is scoped to this same universe as the rest of the app
   var lotBySymbol = {};
   var watchlist = [];  // ordered list of symbols, persisted
   var lastQuotes = {}; // symbol -> {ltp, chp}
+  var selectedSymbol = null; // which watchlist row's option chain is showing on the right
 
   function loadWatchlist(){
     try {
@@ -220,7 +349,8 @@
       // Fyers gives us ltp + % change directly; derive the absolute rupee
       // change from those two rather than needing a separate field/poll.
       var change = (ltp !== null && chp !== null) ? ltp - ltp / (1 + chp / 100) : null;
-      return '<tr data-symbol="' + symbol + '">' +
+      var rowClass = symbol === selectedSymbol ? ' class="row-selected"' : '';
+      return '<tr data-symbol="' + symbol + '"' + rowClass + '>' +
         '<td>' + symbol + '</td>' +
         '<td>' + (ltp !== null ? fmtNum(ltp) : '—') + '</td>' +
         '<td class="' + pctClass(change) + '">' + (change !== null ? (change > 0 ? '+' : '') + fmtNum(change) : '—') + '</td>' +
@@ -232,17 +362,25 @@
 
   gridBody.addEventListener('click', function(e){
     var btn = e.target.closest('.remove-btn');
-    if (!btn) return;
-    var symbol = btn.getAttribute('data-symbol');
-    watchlist = watchlist.filter(function(s){ return s !== symbol; });
-    saveWatchlist();
-    renderGrid();
+    if (btn) {
+      var removed = btn.getAttribute('data-symbol');
+      watchlist = watchlist.filter(function(s){ return s !== removed; });
+      saveWatchlist();
+      if (removed === selectedSymbol) selectSymbol(watchlist[0] || null);
+      renderGrid();
+      return;
+    }
+    var row = e.target.closest('tr[data-symbol]');
+    if (!row) return;
+    selectSymbol(row.getAttribute('data-symbol'));
   });
 
   function addSymbol(symbol){
-    if (watchlist.indexOf(symbol) !== -1) return;
-    watchlist.push(symbol);
-    saveWatchlist();
+    if (watchlist.indexOf(symbol) === -1) {
+      watchlist.push(symbol);
+      saveWatchlist();
+    }
+    selectSymbol(symbol);
     renderGrid();
   }
 
@@ -329,9 +467,151 @@
       .then(function(){ setTimeout(pollQuotes, QUOTE_POLL_MS); });
   }
 
+  // ---------- Option-chain panel ----------
+  var chainEmpty = document.getElementById('chainEmpty');
+  var chainContent = document.getElementById('chainContent');
+  var tsSpot = document.getElementById('tsSpot');
+  var tsVix = document.getElementById('tsVix');
+  var tsFut = document.getElementById('tsFut');
+  var expiryTabsEl = document.getElementById('expiryTabs');
+  var expiryMoreBtn = document.getElementById('expiryMoreBtn');
+  var expiryDropdown = document.getElementById('expiryDropdown');
+  var chainBody = document.getElementById('chainBody');
+
+  var CHAIN_TAB_COUNT = 4; // matches the reference design: a handful of tabs + an overflow dropdown for the rest
+  var chainData = null;    // last fetched /api/fyers/option-chain response
+  var selectedExpiry = null;
+  var chainFetchToken = 0; // guards against a slow, stale fetch clobbering a newer selection's render
+
+  function selectSymbol(symbol){
+    if (symbol === selectedSymbol) return;
+    selectedSymbol = symbol;
+    try { localStorage.setItem(SELECTED_SYMBOL_KEY, symbol || ''); } catch (err) {}
+    selectedExpiry = null;
+    chainData = null;
+    renderGrid();
+    fetchChain();
+  }
+
+  function fmtDelta(value){
+    if (value === null || value === undefined) return '—';
+    return value.toFixed(2);
+  }
+
+  function renderChain(){
+    if (!selectedSymbol || !chainData) {
+      chainEmpty.hidden = false;
+      chainContent.hidden = true;
+      return;
+    }
+    chainEmpty.hidden = true;
+    chainContent.hidden = false;
+
+    tsSpot.textContent = chainData.spot !== null ? fmtNum(chainData.spot) : '—';
+    tsSpot.className = 'ts-value ' + pctClass(chainData.spotChp);
+    tsVix.textContent = chainData.vix !== null ? fmtNum(chainData.vix) : '—';
+    tsFut.textContent = chainData.future !== null ? fmtNum(chainData.future) : '—';
+    tsFut.className = 'ts-value ' + pctClass(chainData.futureChp);
+
+    var expiries = chainData.expiries || [];
+    var shown = expiries.slice(0, CHAIN_TAB_COUNT);
+    var overflow = expiries.slice(CHAIN_TAB_COUNT);
+    expiryTabsEl.innerHTML = shown.map(function(e){
+      var active = e.expiry === selectedExpiry ? ' active' : '';
+      return '<button type="button" class="expiry-tab' + active + '" data-expiry="' + e.expiry + '">' + e.date + '</button>';
+    }).join('');
+    expiryMoreBtn.hidden = overflow.length === 0;
+    expiryDropdown.innerHTML = overflow.map(function(e){
+      var active = e.expiry === selectedExpiry ? ' active' : '';
+      return '<div class="expiry-option' + active + '" data-expiry="' + e.expiry + '">' + e.date + '</div>';
+    }).join('');
+
+    var rows = chainData.rows || [];
+    var maxCallOi = rows.reduce(function(m, r){ return r.call ? Math.max(m, r.call.oi) : m; }, 0) || 1;
+    var maxPutOi = rows.reduce(function(m, r){ return r.put ? Math.max(m, r.put.oi) : m; }, 0) || 1;
+    var spot = chainData.spot;
+
+    chainBody.innerHTML = rows.map(function(row){
+      var call = row.call, put = row.put;
+      var callItm = spot !== null && row.strike < spot;
+      var putItm = spot !== null && row.strike > spot;
+      var atm = row.strike === chainData.atmStrike;
+      var callOiPct = call ? Math.round((call.oi / maxCallOi) * 100) : 0;
+      var putOiPct = put ? Math.round((put.oi / maxPutOi) * 100) : 0;
+      return '<tr class="' + (atm ? 'atm-row' : '') + '">' +
+        '<td class="col-delta' + (callItm ? ' cell-itm' : '') + '">' + (call ? '<span class="delta-call">' + fmtDelta(call.delta) + '</span>' : '—') + '</td>' +
+        '<td class="' + (callItm ? 'cell-itm' : '') + '">' + (call ? fmtNum(call.ltp) : '—') + '</td>' +
+        '<td class="cell-oi cell-oi-call' + (callItm ? ' cell-itm' : '') + '" style="--pct:' + callOiPct + '%"></td>' +
+        '<td class="cell-strike">' + fmtNum(row.strike) + '</td>' +
+        '<td class="cell-oi cell-oi-put' + (putItm ? ' cell-itm' : '') + '" style="--pct:' + putOiPct + '%"></td>' +
+        '<td class="' + (putItm ? 'cell-itm' : '') + '">' + (put ? fmtNum(put.ltp) : '—') + '</td>' +
+        '<td class="col-delta' + (putItm ? ' cell-itm' : '') + '">' + (put ? '<span class="delta-put">' + fmtDelta(put.delta) + '</span>' : '—') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  expiryTabsEl.addEventListener('click', function(e){
+    var btn = e.target.closest('.expiry-tab');
+    if (!btn) return;
+    selectedExpiry = btn.getAttribute('data-expiry');
+    fetchChain();
+  });
+  expiryMoreBtn.addEventListener('click', function(e){
+    e.stopPropagation();
+    expiryDropdown.hidden = !expiryDropdown.hidden;
+  });
+  expiryDropdown.addEventListener('click', function(e){
+    var opt = e.target.closest('.expiry-option');
+    if (!opt) return;
+    selectedExpiry = opt.getAttribute('data-expiry');
+    expiryDropdown.hidden = true;
+    fetchChain();
+  });
+  document.addEventListener('click', function(e){
+    if (!e.target.closest('.chain-expiries')) expiryDropdown.hidden = true;
+  });
+
+  function fetchChain(){
+    if (!selectedSymbol) {
+      chainData = null;
+      renderChain();
+      return;
+    }
+    var token = ++chainFetchToken;
+    var url = '/api/fyers/option-chain?symbol=' + encodeURIComponent(selectedSymbol) +
+      (selectedExpiry ? '&expiry=' + encodeURIComponent(selectedExpiry) : '');
+    fetch(url)
+      .then(function(res){
+        if (res.status !== 401) markBrokerConnected();
+        return res.json();
+      })
+      .then(function(body){
+        if (token !== chainFetchToken) return; // a newer selection/expiry superseded this fetch
+        if (body && body.status === 'ok') {
+          chainData = body;
+          if (!selectedExpiry) selectedExpiry = body.selectedExpiry;
+          renderChain();
+        }
+      })
+      .catch(function(){ /* keep last known chain on transient network errors */ });
+  }
+
+  var CHAIN_POLL_MS = 6000;
+  function pollChain(){
+    if (selectedSymbol) fetchChain();
+    setTimeout(pollChain, CHAIN_POLL_MS);
+  }
+
   watchlist = loadWatchlist();
+  try {
+    var savedSelection = localStorage.getItem(SELECTED_SYMBOL_KEY);
+    if (savedSelection && watchlist.indexOf(savedSelection) !== -1) selectedSymbol = savedSelection;
+  } catch (err) {}
+  if (!selectedSymbol && watchlist.length > 0) selectedSymbol = watchlist[0];
   renderGrid();
+  renderChain();
   pollQuotes();
+  pollChain();
 
   fetch('source/fo-stocks.json')
     .then(function(res){ return res.json(); })

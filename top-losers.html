@@ -350,6 +350,14 @@
   var timeSelect = document.getElementById('timeFilter');
   timeSelect.addEventListener('change', function(){
     timeKey = timeSelect.value;
+    // Reset to the page's default sort (biggest losers first) rather than
+    // keeping whatever direction a prior manual header-click left behind --
+    // otherwise a leftover "desc" sort on the always->=0 ATL metric shows
+    // the stocks that have recovered MOST from their low at the top, which
+    // reads exactly like a gainers list on the Losers page.
+    sortState = { column: 'pct', direction: 'asc' };
+    sortHeaderIds.forEach(function(hid){ document.getElementById(hid).classList.remove('sort-asc', 'sort-desc'); });
+    document.getElementById('thPct').classList.add('sort-asc');
     renderRows();
   });
 

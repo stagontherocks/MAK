@@ -1,11 +1,17 @@
 // api/fyers/gainers.js
-// Top Gainers screener: for every F&O stock (source/fo-stocks.json, no
-// indices/MCX), computes % change over 1 day / 1 month / 3 months / 6
-// months from Fyers daily candles, using the universal gain formula
-// ((current - past) / past) * 100. Mirrors screener.js's history-fetch,
-// rate-limit, batching and caching pattern -- see that file for why the
-// concurrency/spacing constants are set the way they are (sustained rate,
-// not burst rate, since batches chain back-to-back with no idle gaps).
+// Backs BOTH top-gainers.html and top-losers.html -- it returns every F&O
+// stock's full 1D/1M/3M/6M period set, so "gainers" vs "losers" is purely a
+// client-side default-sort difference (ascending vs descending), not a
+// different data feed. Kept under its original "gainers" filename since
+// that's the deployed endpoint path; rename would just be churn.
+//
+// For every F&O stock (source/fo-stocks.json, no indices/MCX), computes %
+// change over 1 day / 1 month / 3 months / 6 months from Fyers daily
+// candles, using the universal gain formula ((current - past) / past) *
+// 100. Mirrors screener.js's history-fetch, rate-limit, batching and
+// caching pattern -- see that file for why the concurrency/spacing
+// constants are set the way they are (sustained rate, not burst rate,
+// since batches chain back-to-back with no idle gaps).
 const { getInstrumentMap } = require('./_contracts');
 const FO_STOCKS = require('../../source/fo-stocks.json'); // [symbol, lotSize] pairs
 

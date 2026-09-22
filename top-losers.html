@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Top Gainers — GrabMyStone</title>
+<title>Top Losers — GrabMyStone</title>
 <link rel="icon" href="images/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -114,8 +114,8 @@
   <div class="wrap">
     <nav class="nav-links">
       <a href="trading.html">Arbitrage</a>
-      <a href="top-losers.html" class="down">Top Losers</a>
-      <a href="top-gainers.html" class="up active">Top Gainers</a>
+      <a href="top-losers.html" class="down active">Top Losers</a>
+      <a href="top-gainers.html" class="up">Top Gainers</a>
       <a href="hiv-stocks.html">High IV</a>
       <a href="#">Watchlist</a>
       <a href="#">Positions</a>
@@ -186,7 +186,7 @@
   });
 
   var BATCH_LIMIT = 10;
-  var CACHE_KEY = 'topGainersCache_v1';
+  var CACHE_KEY = 'topLosersCache_v1';
   var rows = [];
   var isScanning = false;
   var statusEl = document.getElementById('screenerStatus');
@@ -217,9 +217,10 @@
     return value > 0 ? 'price-up' : (value < 0 ? 'price-down' : '');
   }
 
-  // Single-column sort, 3-state cycle (desc -> asc -> unsorted), same model
+  // Single-column sort, 3-state cycle (asc -> desc -> unsorted), same model
   // as trading.html's profit-column sort. Defaults to % Chg (1 day)
-  // descending on load since this is a Top Gainers screen.
+  // ascending on load (biggest losers first) since this is a Top Losers
+  // screen -- the mirror image of top-gainers.html's default.
   var SORT_VALUE_GETTERS = {
     ltp: function(r){ return r.ltp; },
     d1: function(r){ return r.d1; },
@@ -227,7 +228,7 @@
     m3: function(r){ return r.m3; },
     m6: function(r){ return r.m6; }
   };
-  var sortState = { column: 'd1', direction: 'desc' };
+  var sortState = { column: 'd1', direction: 'asc' };
   var sortHeaderIds = ['thLtp', 'thD1', 'thM1', 'thM3', 'thM6'];
 
   function sortedRows(){
@@ -261,15 +262,15 @@
     var th = document.getElementById(id);
     th.addEventListener('click', function(){
       if (sortState.column === column) {
-        if (sortState.direction === 'desc') {
-          sortState.direction = 'asc';
+        if (sortState.direction === 'asc') {
+          sortState.direction = 'desc';
         } else {
           sortState.column = null;
-          sortState.direction = 'desc';
+          sortState.direction = 'asc';
         }
       } else {
         sortState.column = column;
-        sortState.direction = 'desc';
+        sortState.direction = 'asc';
       }
       sortHeaderIds.forEach(function(hid){ document.getElementById(hid).classList.remove('sort-asc', 'sort-desc'); });
       if (sortState.column) th.classList.add(sortState.direction === 'asc' ? 'sort-asc' : 'sort-desc');
@@ -281,7 +282,7 @@
   bindSortHeader('thM1', 'm1');
   bindSortHeader('thM3', 'm3');
   bindSortHeader('thM6', 'm6');
-  document.getElementById('thD1').classList.add('sort-desc');
+  document.getElementById('thD1').classList.add('sort-asc');
 
   var searchInput = document.getElementById('stockSearch');
   var searchClear = document.getElementById('stockSearchClear');
@@ -296,6 +297,9 @@
     searchInput.focus();
   });
 
+  // Reuses the same /api/fyers/gainers endpoint as top-gainers.html -- it
+  // already returns every F&O stock's full period set, so "losers" is
+  // purely a client-side default-sort difference, not a different data feed.
   function fetchBatch(offset){
     fetch('/api/fyers/gainers?offset=' + offset + '&limit=' + BATCH_LIMIT)
       .then(function(res){

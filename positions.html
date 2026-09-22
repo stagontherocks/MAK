@@ -105,7 +105,13 @@
     background:#161616;border:1px solid #262626;border-radius:12px;
     width:100%;max-width:440px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.5);
   }
-  .modal-heading{font-size:18px;font-weight:700;margin-bottom:20px}
+  .modal-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
+  .modal-heading{font-size:18px;font-weight:700}
+  .modal-close-btn{
+    border:none;background:transparent;color:#787878;font-size:20px;line-height:1;
+    cursor:pointer;padding:2px 4px;border-radius:6px;transition:background .15s ease,color .15s ease;
+  }
+  .modal-close-btn:hover{background:#262626;color:#eeeeee}
   .modal-field{margin-bottom:16px}
   .modal-label{
     display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
@@ -179,7 +185,10 @@
      strategy builder/tracker is later work. -->
 <div class="modal-overlay" id="strategyModalOverlay" hidden>
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="strategyModalHeading">
-    <div class="modal-heading" id="strategyModalHeading">Add Strategy</div>
+    <div class="modal-header">
+      <div class="modal-heading" id="strategyModalHeading">Add Strategy</div>
+      <button type="button" class="modal-close-btn" id="strategyCloseBtn" aria-label="Close">&times;</button>
+    </div>
     <div class="modal-field">
       <label class="modal-label" for="strategyNameInput">Strategy Name</label>
       <input type="text" class="modal-input" id="strategyNameInput" placeholder="e.g. Iron Condor" autocomplete="off">
@@ -302,6 +311,7 @@
   var imageFileInput = document.getElementById('imageFileInput');
   var strategyResetBtn = document.getElementById('strategyResetBtn');
   var strategyCancelBtn = document.getElementById('strategyCancelBtn');
+  var strategyCloseBtn = document.getElementById('strategyCloseBtn');
   var strategyAddBtn = document.getElementById('strategyAddBtn');
 
   var selectedImageFile = null; // only one at a time -- a new pick/drop/paste always replaces it
@@ -350,6 +360,7 @@
 
   addStrategyBtn.addEventListener('click', openStrategyModal);
   strategyCancelBtn.addEventListener('click', closeStrategyModal);
+  strategyCloseBtn.addEventListener('click', closeStrategyModal);
   strategyResetBtn.addEventListener('click', resetStrategyForm);
   modalOverlay.addEventListener('click', function(e){
     if (e.target === modalOverlay) closeStrategyModal();

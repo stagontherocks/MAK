@@ -61,6 +61,7 @@
   }
   .select-input:hover{border-color:#3a3a3a}
   .select-input:focus{outline:none;border-color:#4a4a4a}
+  .select-input:disabled{opacity:.5;cursor:not-allowed}
   .search-wrap{position:relative;width:220px}
   .search-input{
     background:#161616 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23787878" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') no-repeat 14px center/14px;
@@ -149,6 +150,7 @@
           <option value="m1">1 Month</option>
           <option value="m3">3 Months</option>
           <option value="m6">6 Months</option>
+          <option value="atl">ATL (52W Low)</option>
         </select>
         <select class="select-input" id="magnitudeFilter" aria-label="Minimum decline">
           <option value="0" selected>All</option>
@@ -280,11 +282,17 @@
     });
   }
 
+  // This is a LOSERS grid -- "All" still means only actual decliners
+  // (pct < 0), never every stock regardless of direction. "5%" narrows that
+  // to down BY 5% or more (an inclusive floor, pct <= -5), not a
+  // strictly-greater-decline test. Not meaningful for ATL (see the
+  // timeSelect handler below, which disables this control in that mode).
   function passesMagnitudeFilter(r){
-    if (magnitudeThreshold === 0) return true;
+    if (timeKey === 'atl') return true;
     var pct = r[timeKey];
     if (pct === null || pct === undefined) return false;
-    return pct < -magnitudeThreshold;
+    if (magnitudeThreshold === 0) return pct < 0;
+    return pct <= -magnitudeThreshold;
   }
 
   function renderRows(){
@@ -342,13 +350,21 @@
   });
 
   var timeSelect = document.getElementById('timeFilter');
+  var magnitudeSelect = document.getElementById('magnitudeFilter');
+  var magnitudeThreshold = 0;
   timeSelect.addEventListener('change', function(){
     timeKey = timeSelect.value;
+    // ATL is "% above the 52-week low" (always >=0), not a signed period
+    // return -- the "<-N%" decline thresholds don't have a clean meaning
+    // against it, so disable rather than silently reinterpret them.
+    magnitudeSelect.disabled = (timeKey === 'atl');
+    if (magnitudeSelect.disabled) {
+      magnitudeSelect.value = '0';
+      magnitudeThreshold = 0;
+    }
     renderRows();
   });
 
-  var magnitudeSelect = document.getElementById('magnitudeFilter');
-  var magnitudeThreshold = 0;
   magnitudeSelect.addEventListener('change', function(){
     magnitudeThreshold = Number(magnitudeSelect.value);
     renderRows();

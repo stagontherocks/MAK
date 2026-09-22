@@ -265,10 +265,13 @@
     });
   }
 
+  // This is a GAINERS grid -- "All" still means only actual advancers
+  // (d1 > 0), never every stock regardless of direction. "5%" narrows that
+  // to up BY 5% or more (an inclusive floor, d1 >= 5).
   function passesMagnitudeFilter(r){
-    if (magnitudeThreshold === 0) return true;
     if (r.d1 === null || r.d1 === undefined) return false;
-    return r.d1 > magnitudeThreshold;
+    if (magnitudeThreshold === 0) return r.d1 > 0;
+    return r.d1 >= magnitudeThreshold;
   }
 
   function renderRows(){

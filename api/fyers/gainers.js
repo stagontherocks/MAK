@@ -16,7 +16,7 @@ const { getInstrumentMap } = require('./_contracts');
 const FO_STOCKS = require('../../source/fo-stocks.json'); // [symbol, lotSize] pairs
 
 const HISTORY_URL = 'https://api-t1.fyers.in/data/history';
-const HISTORY_RANGE_DAYS = 200; // 6 months + margin for weekends/holidays
+const HISTORY_RANGE_DAYS = 366; // 52 weeks + margin for weekends/holidays (ATL needs a full year)
 const FETCH_CONCURRENCY = 5;
 const FETCH_SPACING_MS = 2000; // 150 req/min sustained, safely under Fyers' 200/min cap
 const CACHE_TTL_MS = 20 * 60 * 60 * 1000;
@@ -31,6 +31,7 @@ const LOOKBACK_SECONDS = {
   m3: 91 * 24 * 60 * 60,
   m6: 182 * 24 * 60 * 60,
 };
+const FIFTY_TWO_WEEK_SECONDS = 364 * 24 * 60 * 60;
 
 const batchCache = new Map(); // key: "offset:limit" -> { builtAt, payload }
 
@@ -83,6 +84,24 @@ function pctChange(current, past) {
   return ((current - past) / past) * 100;
 }
 
+// candles ascending by time. "ATL" here means 52-week low (the deepest
+// intraday low over the trailing year, not the stock's true all-time low --
+// Fyers' history endpoint plus this file's HISTORY_RANGE_DAYS can't reach
+// further back than that anyway). Uses candle LOW (index 3), not close,
+// same reasoning as screener.js's 6-month-high calc: the actual intraday
+// extreme, not just the lowest closing price.
+function fiftyTwoWeekLow(candles) {
+  if (!candles || candles.length < 2) return null;
+  const latest = candles[candles.length - 1];
+  const cutoffTs = latest[0] - FIFTY_TWO_WEEK_SECONDS;
+  let low = null;
+  for (const c of candles) {
+    if (c[0] < cutoffTs) continue;
+    if (low === null || c[3] < low) low = c[3];
+  }
+  return low;
+}
+
 function computeChanges(candles) {
   if (!candles || candles.length < 2) return null;
   const latest = candles[candles.length - 1];
@@ -95,6 +114,10 @@ function computeChanges(candles) {
     const refClose = closeNearCutoff(candles, latestTs - LOOKBACK_SECONDS[key]);
     out[key] = pctChange(latestClose, refClose);
   }
+  // % above the 52-week low -- always >=0 by construction, so it reads as
+  // "how far this stock is from its own yearly low" rather than a signed
+  // period return like d1/m1/m3/m6.
+  out.atl = pctChange(latestClose, fiftyTwoWeekLow(candles));
   return out;
 }
 
@@ -110,7 +133,7 @@ async function scanBatch(entries, authHeader) {
     chunk.forEach(([symbol, , lot], idx) => {
       const changes = computeChanges(histories[idx]);
       if (!changes) return;
-      results.push({ symbol, lot, ltp: changes.ltp, d1: changes.d1, m1: changes.m1, m3: changes.m3, m6: changes.m6 });
+      results.push({ symbol, lot, ltp: changes.ltp, d1: changes.d1, m1: changes.m1, m3: changes.m3, m6: changes.m6, atl: changes.atl });
     });
     if (i + FETCH_CONCURRENCY < entries.length) await sleep(FETCH_SPACING_MS);
   }
@@ -159,3 +182,4 @@ async function handler(req, res) {
 module.exports = handler;
 module.exports.computeChanges = computeChanges;
 module.exports.closeNearCutoff = closeNearCutoff;
+module.exports.fiftyTwoWeekLow = fiftyTwoWeekLow;

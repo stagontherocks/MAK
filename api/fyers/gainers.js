@@ -132,8 +132,15 @@ function computeChanges(candles) {
   // stock is from its own yearly low", not a signed period return like
   // d1/m1/m3/m6). % from the 52-week high is the mirror image and is
   // always <=0 (0 means currently AT the high).
-  out.atl = pctChange(latestClose, fiftyTwoWeekLow(candles));
-  out.ath = pctChange(latestClose, fiftyTwoWeekHigh(candles));
+  const week52Low = fiftyTwoWeekLow(candles);
+  const week52High = fiftyTwoWeekHigh(candles);
+  out.atl = pctChange(latestClose, week52Low);
+  out.ath = pctChange(latestClose, week52High);
+  // Also keep the raw price levels themselves (not just the % derived from
+  // them) -- top-gainers.html/top-losers.html show these as their own
+  // "52W Low"/"52W High" columns.
+  out.week52Low = week52Low;
+  out.week52High = week52High;
   return out;
 }
 
@@ -149,7 +156,10 @@ async function scanBatch(entries, authHeader) {
     chunk.forEach(([symbol, , lot], idx) => {
       const changes = computeChanges(histories[idx]);
       if (!changes) return;
-      results.push({ symbol, lot, ltp: changes.ltp, d1: changes.d1, m1: changes.m1, m3: changes.m3, m6: changes.m6, atl: changes.atl, ath: changes.ath });
+      results.push({
+        symbol, lot, ltp: changes.ltp, d1: changes.d1, m1: changes.m1, m3: changes.m3, m6: changes.m6,
+        atl: changes.atl, ath: changes.ath, week52Low: changes.week52Low, week52High: changes.week52High,
+      });
     });
     if (i + FETCH_CONCURRENCY < entries.length) await sleep(FETCH_SPACING_MS);
   }

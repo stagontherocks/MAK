@@ -166,6 +166,8 @@
               <th class="sortable" id="thLtp">LTP</th>
               <th class="sortable" id="thChg">Change</th>
               <th class="sortable" id="thPct">% Change</th>
+              <th class="sortable" id="th52wLow">52W Low</th>
+              <th class="sortable" id="th52wHigh">52W High</th>
             </tr>
           </thead>
           <tbody id="gridBody"></tbody>
@@ -204,9 +206,10 @@
   });
 
   var BATCH_LIMIT = 10;
-  // Bumped to v2 when the `ath` field was added -- v1 caches predate it and
-  // would otherwise render blank ATH values until a manual Refresh.
-  var CACHE_KEY = 'topGainersCache_v2';
+  // Bump this key any time gainers.js's response shape changes -- v2 added
+  // `ath`, v3 added week52Low/week52High. An old cached scan would otherwise
+  // render those columns blank until a manual Refresh.
+  var CACHE_KEY = 'topGainersCache_v3';
   var rows = [];
   var isScanning = false;
   var statusEl = document.getElementById('screenerStatus');
@@ -267,10 +270,12 @@
   var SORT_VALUE_GETTERS = {
     ltp: function(r){ return r.ltp; },
     chg: changeFor,
-    pct: function(r){ return r[timeKey]; }
+    pct: function(r){ return r[timeKey]; },
+    week52Low: function(r){ return r.week52Low; },
+    week52High: function(r){ return r.week52High; }
   };
   var sortState = { column: 'pct', direction: 'desc' };
-  var sortHeaderIds = ['thLtp', 'thChg', 'thPct'];
+  var sortHeaderIds = ['thLtp', 'thChg', 'thPct', 'th52wLow', 'th52wHigh'];
 
   function sortedRows(){
     var getValue = SORT_VALUE_GETTERS[sortState.column];
@@ -306,6 +311,8 @@
         '<td>' + (r.ltp !== null && r.ltp !== undefined ? fmtNum(r.ltp) : '—') + '</td>' +
         '<td class="' + rowColorClass(change) + '">' + (change !== null ? (change > 0 ? '+' : '') + fmtNum(change) : '—') + '</td>' +
         '<td class="' + rowColorClass(pct) + '">' + fmtPct(pct) + '</td>' +
+        '<td>' + (r.week52Low !== null && r.week52Low !== undefined ? fmtNum(r.week52Low) : '—') + '</td>' +
+        '<td>' + (r.week52High !== null && r.week52High !== undefined ? fmtNum(r.week52High) : '—') + '</td>' +
         '</tr>';
     }).join('');
   }
@@ -332,6 +339,8 @@
   bindSortHeader('thLtp', 'ltp');
   bindSortHeader('thChg', 'chg');
   bindSortHeader('thPct', 'pct');
+  bindSortHeader('th52wLow', 'week52Low');
+  bindSortHeader('th52wHigh', 'week52High');
   document.getElementById('thPct').classList.add('sort-desc');
 
   var searchInput = document.getElementById('stockSearch');

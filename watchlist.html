@@ -507,7 +507,8 @@
   var CHAIN_TAB_COUNT = 4; // matches the reference design: a handful of tabs + an overflow dropdown for the rest
   var chainData = null;    // last fetched /api/fyers/option-chain response
   var selectedExpiry = null;
-  var chainFetchToken = 0; // guards against a slow, stale fetch clobbering a newer selection's render
+  var chainFetchToken = 0;      // guards against a slow, stale fetch clobbering a newer selection's render
+  var chainNeedsScrollToAtm = true; // scroll to the ATM row on a fresh symbol/expiry load, not on every 6s poll refresh
 
   function selectSymbol(symbol){
     if (symbol === selectedSymbol) return;
@@ -515,6 +516,7 @@
     try { localStorage.setItem(SELECTED_SYMBOL_KEY, symbol || ''); } catch (err) {}
     selectedExpiry = null;
     chainData = null;
+    chainNeedsScrollToAtm = true;
     renderGrid();
     fetchChain();
   }
@@ -574,12 +576,19 @@
         '<td class="col-delta' + (putItm ? ' cell-itm' : '') + '">' + (put ? '<span class="delta-put">' + fmtDelta(put.delta) + '</span>' : '—') + '</td>' +
         '</tr>';
     }).join('');
+
+    if (chainNeedsScrollToAtm) {
+      var atmEl = chainBody.querySelector('.atm-row');
+      if (atmEl) atmEl.scrollIntoView({ block: 'center', behavior: 'auto' });
+      chainNeedsScrollToAtm = false;
+    }
   }
 
   expiryTabsEl.addEventListener('click', function(e){
     var btn = e.target.closest('.expiry-tab');
     if (!btn) return;
     selectedExpiry = btn.getAttribute('data-expiry');
+    chainNeedsScrollToAtm = true;
     fetchChain();
   });
   expiryMoreBtn.addEventListener('click', function(e){
@@ -590,6 +599,7 @@
     var opt = e.target.closest('.expiry-option');
     if (!opt) return;
     selectedExpiry = opt.getAttribute('data-expiry');
+    chainNeedsScrollToAtm = true;
     expiryDropdown.hidden = true;
     fetchChain();
   });

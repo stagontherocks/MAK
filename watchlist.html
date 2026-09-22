@@ -287,12 +287,14 @@
                     <th class="col-delta">Call Δ</th>
                     <th>LTP</th>
                     <th>OI</th>
+                    <th>Intrinsic</th>
+                    <th>Time Value</th>
                     <th class="col-strike">Strike</th>
+                    <th>Time Value</th>
+                    <th>Intrinsic</th>
                     <th>OI</th>
                     <th>LTP</th>
                     <th class="col-delta">Put Δ</th>
-                    <th>Intrinsic</th>
-                    <th>Time Value</th>
                   </tr>
                 </thead>
                 <tbody id="chainBody"></tbody>
@@ -607,31 +609,34 @@
       var callOiPct = call ? Math.round((call.oi / maxCallOi) * 100) : 0;
       var putOiPct = put ? Math.round((put.oi / maxPutOi) * 100) : 0;
 
-      // Intrinsic Value (call) = Spot - Strike; (put) = Strike - Spot;
-      // Time Value = Premium - Intrinsic. Only meaningful for whichever
-      // side is actually in the money -- the OTM side's intrinsic is
-      // trivially 0 (all premium is time value), which isn't the
-      // interesting number here, so those cells just show '—'.
-      var intrinsic = null, timeValue = null;
-      if (spot !== null && callItm && call) {
-        intrinsic = spot - row.strike;
-        timeValue = call.ltp - intrinsic;
-      } else if (spot !== null && putItm && put) {
-        intrinsic = row.strike - spot;
-        timeValue = put.ltp - intrinsic;
+      // Intrinsic Value (call) = max(Spot - Strike, 0); (put) = max(Strike -
+      // Spot, 0) -- computed independently per side, same as Delta already
+      // is, not just for whichever side happens to be ITM. An OTM side's
+      // intrinsic is legitimately 0 (all premium is time value); only tint
+      // it like the rest of the row's ITM cells when that side is ITM.
+      var callIntrinsic = null, callTimeValue = null;
+      if (spot !== null && call) {
+        callIntrinsic = Math.max(spot - row.strike, 0);
+        callTimeValue = call.ltp - callIntrinsic;
       }
-      var itmValueClass = (callItm || putItm) ? 'cell-itm' : '';
+      var putIntrinsic = null, putTimeValue = null;
+      if (spot !== null && put) {
+        putIntrinsic = Math.max(row.strike - spot, 0);
+        putTimeValue = put.ltp - putIntrinsic;
+      }
 
       return '<tr class="' + (atm ? 'atm-row' : '') + '">' +
         '<td class="col-delta' + (callItm ? ' cell-itm' : '') + '">' + (call ? '<span class="delta-call">' + fmtDelta(call.delta) + '</span>' : '—') + '</td>' +
         '<td class="' + (callItm ? 'cell-itm' : '') + '">' + (call ? fmtNum(call.ltp) : '—') + '</td>' +
         '<td class="cell-oi cell-oi-call' + (callItm ? ' cell-itm' : '') + '" style="--pct:' + callOiPct + '%"></td>' +
+        '<td class="' + (callItm ? 'cell-itm' : '') + '">' + (callIntrinsic !== null ? fmtNum(callIntrinsic) : '—') + '</td>' +
+        '<td class="' + (callItm ? 'cell-itm' : '') + '">' + (callTimeValue !== null ? fmtNum(callTimeValue) : '—') + '</td>' +
         '<td class="cell-strike">' + fmtNum(row.strike) + '</td>' +
+        '<td class="' + (putItm ? 'cell-itm' : '') + '">' + (putTimeValue !== null ? fmtNum(putTimeValue) : '—') + '</td>' +
+        '<td class="' + (putItm ? 'cell-itm' : '') + '">' + (putIntrinsic !== null ? fmtNum(putIntrinsic) : '—') + '</td>' +
         '<td class="cell-oi cell-oi-put' + (putItm ? ' cell-itm' : '') + '" style="--pct:' + putOiPct + '%"></td>' +
         '<td class="' + (putItm ? 'cell-itm' : '') + '">' + (put ? fmtNum(put.ltp) : '—') + '</td>' +
         '<td class="col-delta' + (putItm ? ' cell-itm' : '') + '">' + (put ? '<span class="delta-put">' + fmtDelta(put.delta) + '</span>' : '—') + '</td>' +
-        '<td class="' + itmValueClass + '">' + (intrinsic !== null ? fmtNum(intrinsic) : '—') + '</td>' +
-        '<td class="' + itmValueClass + '">' + (timeValue !== null ? fmtNum(timeValue) : '—') + '</td>' +
         '</tr>';
     }).join('');
 

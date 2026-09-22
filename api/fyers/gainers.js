@@ -102,6 +102,20 @@ function fiftyTwoWeekLow(candles) {
   return low;
 }
 
+// Mirror of fiftyTwoWeekLow, using candle HIGH (index 2) and the max instead
+// of the min -- backs top-gainers.html's "ATH" period option.
+function fiftyTwoWeekHigh(candles) {
+  if (!candles || candles.length < 2) return null;
+  const latest = candles[candles.length - 1];
+  const cutoffTs = latest[0] - FIFTY_TWO_WEEK_SECONDS;
+  let high = null;
+  for (const c of candles) {
+    if (c[0] < cutoffTs) continue;
+    if (high === null || c[2] > high) high = c[2];
+  }
+  return high;
+}
+
 function computeChanges(candles) {
   if (!candles || candles.length < 2) return null;
   const latest = candles[candles.length - 1];
@@ -114,10 +128,12 @@ function computeChanges(candles) {
     const refClose = closeNearCutoff(candles, latestTs - LOOKBACK_SECONDS[key]);
     out[key] = pctChange(latestClose, refClose);
   }
-  // % above the 52-week low -- always >=0 by construction, so it reads as
-  // "how far this stock is from its own yearly low" rather than a signed
-  // period return like d1/m1/m3/m6.
+  // % above the 52-week low -- always >=0 by construction ("how far this
+  // stock is from its own yearly low", not a signed period return like
+  // d1/m1/m3/m6). % from the 52-week high is the mirror image and is
+  // always <=0 (0 means currently AT the high).
   out.atl = pctChange(latestClose, fiftyTwoWeekLow(candles));
+  out.ath = pctChange(latestClose, fiftyTwoWeekHigh(candles));
   return out;
 }
 
@@ -133,7 +149,7 @@ async function scanBatch(entries, authHeader) {
     chunk.forEach(([symbol, , lot], idx) => {
       const changes = computeChanges(histories[idx]);
       if (!changes) return;
-      results.push({ symbol, lot, ltp: changes.ltp, d1: changes.d1, m1: changes.m1, m3: changes.m3, m6: changes.m6, atl: changes.atl });
+      results.push({ symbol, lot, ltp: changes.ltp, d1: changes.d1, m1: changes.m1, m3: changes.m3, m6: changes.m6, atl: changes.atl, ath: changes.ath });
     });
     if (i + FETCH_CONCURRENCY < entries.length) await sleep(FETCH_SPACING_MS);
   }
@@ -183,3 +199,4 @@ module.exports = handler;
 module.exports.computeChanges = computeChanges;
 module.exports.closeNearCutoff = closeNearCutoff;
 module.exports.fiftyTwoWeekLow = fiftyTwoWeekLow;
+module.exports.fiftyTwoWeekHigh = fiftyTwoWeekHigh;

@@ -51,6 +51,16 @@
 
   .grid-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap;row-gap:12px}
   .grid-toolbar-left{display:flex;align-items:center;gap:16px;flex-wrap:wrap;row-gap:12px}
+  .toolbar-divider{width:1px;height:24px;background:#262626;flex-shrink:0}
+  .select-input{
+    background:#161616 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23787878" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>') no-repeat right 12px center/14px;
+    border:1px solid #262626;color:#eeeeee;
+    font-family:inherit;font-size:13px;font-weight:600;
+    padding:9px 32px 9px 14px;border-radius:8px;
+    appearance:none;-webkit-appearance:none;cursor:pointer;flex-shrink:0;
+  }
+  .select-input:hover{border-color:#3a3a3a}
+  .select-input:focus{outline:none;border-color:#4a4a4a}
   .search-wrap{position:relative;width:220px}
   .search-input{
     background:#161616 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23787878" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') no-repeat 14px center/14px;
@@ -86,7 +96,7 @@
     background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
   }
   .grid-scroll{overflow:auto;max-height:calc(100vh - 220px)}
-  table{width:100%;border-collapse:collapse;min-width:720px}
+  table{width:100%;border-collapse:collapse;min-width:560px}
   thead th{
     position:sticky;top:0;z-index:1;
     background:#1a1a1a;
@@ -133,6 +143,14 @@
           <input type="text" class="search-input" id="stockSearch" placeholder="Search stock..." aria-label="Search stocks">
           <button type="button" class="search-clear" id="stockSearchClear" aria-label="Clear search" hidden>&times;</button>
         </div>
+        <div class="toolbar-divider"></div>
+        <select class="select-input" id="timeFilter" aria-label="Time period">
+          <option value="d1" selected>Today</option>
+          <option value="m1">1 Month</option>
+          <option value="m3">3 Months</option>
+          <option value="m6">6 Months</option>
+          <option value="ath">ATH (52W High)</option>
+        </select>
       </div>
       <div class="toolbar-right">
         <div class="screener-status" id="screenerStatus">Starting scan...</div>
@@ -146,11 +164,8 @@
             <tr>
               <th>Stock Name</th>
               <th class="sortable" id="thLtp">LTP</th>
-              <th class="sortable" id="thD1">% Chg</th>
-              <th>Lot Size</th>
-              <th class="sortable" id="thM1">1M</th>
-              <th class="sortable" id="thM3">3M</th>
-              <th class="sortable" id="thM6">6M</th>
+              <th class="sortable" id="thChg">Change</th>
+              <th class="sortable" id="thPct">% Change</th>
             </tr>
           </thead>
           <tbody id="gridBody"></tbody>
@@ -211,6 +226,9 @@
     try { localStorage.removeItem(CACHE_KEY); } catch (err) {}
   }
 
+  function fmtNum(value){
+    return value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  }
   function fmtPct(value){
     if (value === null || value === undefined) return '—';
     return (value > 0 ? '+' : '') + value.toFixed(2) + '%';
@@ -220,18 +238,29 @@
     return value > 0 ? 'price-up' : (value < 0 ? 'price-down' : '');
   }
 
+  // Which period backs both the Change/% Change columns and the ranking --
+  // driven by the Time dropdown, mirroring top-losers.html.
+  var timeKey = 'd1';
+  // Fyers gives us ltp + % change per period; derive the absolute rupee
+  // change from those two (same technique as watchlist.html) rather than
+  // needing the backend to also return per-period rupee deltas.
+  function changeFor(r){
+    var pct = r[timeKey];
+    if (r.ltp === null || r.ltp === undefined || pct === null || pct === undefined) return null;
+    return r.ltp - r.ltp / (1 + pct / 100);
+  }
+
   // Single-column sort, 3-state cycle (desc -> asc -> unsorted), same model
-  // as trading.html's profit-column sort. Defaults to % Chg (1 day)
-  // descending on load since this is a Top Gainers screen.
+  // as trading.html's profit-column sort. Defaults to % Change descending on
+  // load (biggest gainers first for the selected period) -- the mirror
+  // image of top-losers.html's default.
   var SORT_VALUE_GETTERS = {
     ltp: function(r){ return r.ltp; },
-    d1: function(r){ return r.d1; },
-    m1: function(r){ return r.m1; },
-    m3: function(r){ return r.m3; },
-    m6: function(r){ return r.m6; }
+    chg: changeFor,
+    pct: function(r){ return r[timeKey]; }
   };
-  var sortState = { column: 'd1', direction: 'desc' };
-  var sortHeaderIds = ['thLtp', 'thD1', 'thM1', 'thM3', 'thM6'];
+  var sortState = { column: 'pct', direction: 'desc' };
+  var sortHeaderIds = ['thLtp', 'thChg', 'thPct'];
 
   function sortedRows(){
     var getValue = SORT_VALUE_GETTERS[sortState.column];
@@ -244,10 +273,14 @@
     });
   }
 
-  // This is a GAINERS grid -- always only actual advancers (d1 > 0), never
-  // every stock regardless of direction.
+  // This is a GAINERS grid -- always only actual advancers (pct > 0), never
+  // every stock regardless of direction. Not meaningful for ATH (a
+  // proximity-to-high measure, always <=0, not a signed return), so that
+  // period shows every stock instead.
   function passesDirectionFilter(r){
-    return r.d1 !== null && r.d1 !== undefined && r.d1 > 0;
+    if (timeKey === 'ath') return true;
+    var pct = r[timeKey];
+    return pct !== null && pct !== undefined && pct > 0;
   }
 
   function renderRows(){
@@ -256,14 +289,13 @@
       return r.symbol.indexOf(term) !== -1 && passesDirectionFilter(r);
     });
     gridBody.innerHTML = visible.map(function(r){
+      var pct = r[timeKey];
+      var change = changeFor(r);
       return '<tr>' +
         '<td>' + r.symbol + '</td>' +
-        '<td>' + (r.ltp !== null && r.ltp !== undefined ? r.ltp.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—') + '</td>' +
-        '<td class="' + pctClass(r.d1) + '">' + fmtPct(r.d1) + '</td>' +
-        '<td>' + r.lot.toLocaleString('en-IN') + '</td>' +
-        '<td class="' + pctClass(r.m1) + '">' + fmtPct(r.m1) + '</td>' +
-        '<td class="' + pctClass(r.m3) + '">' + fmtPct(r.m3) + '</td>' +
-        '<td class="' + pctClass(r.m6) + '">' + fmtPct(r.m6) + '</td>' +
+        '<td>' + (r.ltp !== null && r.ltp !== undefined ? fmtNum(r.ltp) : '—') + '</td>' +
+        '<td class="' + pctClass(change) + '">' + (change !== null ? (change > 0 ? '+' : '') + fmtNum(change) : '—') + '</td>' +
+        '<td class="' + pctClass(pct) + '">' + fmtPct(pct) + '</td>' +
         '</tr>';
     }).join('');
   }
@@ -288,11 +320,9 @@
     });
   }
   bindSortHeader('thLtp', 'ltp');
-  bindSortHeader('thD1', 'd1');
-  bindSortHeader('thM1', 'm1');
-  bindSortHeader('thM3', 'm3');
-  bindSortHeader('thM6', 'm6');
-  document.getElementById('thD1').classList.add('sort-desc');
+  bindSortHeader('thChg', 'chg');
+  bindSortHeader('thPct', 'pct');
+  document.getElementById('thPct').classList.add('sort-desc');
 
   var searchInput = document.getElementById('stockSearch');
   var searchClear = document.getElementById('stockSearchClear');
@@ -307,6 +337,16 @@
     searchInput.focus();
   });
 
+  var timeSelect = document.getElementById('timeFilter');
+  timeSelect.addEventListener('change', function(){
+    timeKey = timeSelect.value;
+    renderRows();
+  });
+
+  // Reuses the same /api/fyers/gainers endpoint as top-losers.html -- it
+  // already returns every F&O stock's full period set, so "gainers" is
+  // purely a client-side default-sort/direction difference, not a
+  // different data feed.
   function fetchBatch(offset){
     fetch('/api/fyers/gainers?offset=' + offset + '&limit=' + BATCH_LIMIT)
       .then(function(res){

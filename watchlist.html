@@ -285,15 +285,15 @@
                 <thead>
                   <tr>
                     <th class="col-delta">Call Δ</th>
-                    <th>LTP</th>
-                    <th>OI</th>
-                    <th>Intrinsic</th>
                     <th>Time Value</th>
+                    <th>Intrinsic</th>
+                    <th>OI</th>
+                    <th>LTP</th>
                     <th class="col-strike">Strike</th>
-                    <th>Time Value</th>
-                    <th>Intrinsic</th>
-                    <th>OI</th>
                     <th>LTP</th>
+                    <th>OI</th>
+                    <th>Intrinsic</th>
+                    <th>Time Value</th>
                     <th class="col-delta">Put Δ</th>
                   </tr>
                 </thead>
@@ -627,15 +627,15 @@
 
       return '<tr class="' + (atm ? 'atm-row' : '') + '">' +
         '<td class="col-delta' + (callItm ? ' cell-itm' : '') + '">' + (call ? '<span class="delta-call">' + fmtDelta(call.delta) + '</span>' : '—') + '</td>' +
-        '<td class="' + (callItm ? 'cell-itm' : '') + '">' + (call ? fmtNum(call.ltp) : '—') + '</td>' +
-        '<td class="cell-oi cell-oi-call' + (callItm ? ' cell-itm' : '') + '" style="--pct:' + callOiPct + '%"></td>' +
-        '<td class="' + (callItm ? 'cell-itm' : '') + '">' + (callIntrinsic !== null ? fmtNum(callIntrinsic) : '—') + '</td>' +
         '<td class="' + (callItm ? 'cell-itm' : '') + '">' + (callTimeValue !== null ? fmtNum(callTimeValue) : '—') + '</td>' +
+        '<td class="' + (callItm ? 'cell-itm' : '') + '">' + (callIntrinsic !== null ? fmtNum(callIntrinsic) : '—') + '</td>' +
+        '<td class="cell-oi cell-oi-call' + (callItm ? ' cell-itm' : '') + '" style="--pct:' + callOiPct + '%"></td>' +
+        '<td class="' + (callItm ? 'cell-itm' : '') + '">' + (call ? fmtNum(call.ltp) : '—') + '</td>' +
         '<td class="cell-strike">' + fmtNum(row.strike) + '</td>' +
-        '<td class="' + (putItm ? 'cell-itm' : '') + '">' + (putTimeValue !== null ? fmtNum(putTimeValue) : '—') + '</td>' +
-        '<td class="' + (putItm ? 'cell-itm' : '') + '">' + (putIntrinsic !== null ? fmtNum(putIntrinsic) : '—') + '</td>' +
-        '<td class="cell-oi cell-oi-put' + (putItm ? ' cell-itm' : '') + '" style="--pct:' + putOiPct + '%"></td>' +
         '<td class="' + (putItm ? 'cell-itm' : '') + '">' + (put ? fmtNum(put.ltp) : '—') + '</td>' +
+        '<td class="cell-oi cell-oi-put' + (putItm ? ' cell-itm' : '') + '" style="--pct:' + putOiPct + '%"></td>' +
+        '<td class="' + (putItm ? 'cell-itm' : '') + '">' + (putIntrinsic !== null ? fmtNum(putIntrinsic) : '—') + '</td>' +
+        '<td class="' + (putItm ? 'cell-itm' : '') + '">' + (putTimeValue !== null ? fmtNum(putTimeValue) : '—') + '</td>' +
         '<td class="col-delta' + (putItm ? ' cell-itm' : '') + '">' + (put ? '<span class="delta-put">' + fmtDelta(put.delta) + '</span>' : '—') + '</td>' +
         '</tr>';
     }).join('');

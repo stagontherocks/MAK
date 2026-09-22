@@ -58,7 +58,7 @@ async function fetchAllQuotes(symbols, authHeader) {
     for (const entries of results) {
       for (const entry of entries) {
         if (entry.s === 'ok' && entry.v && entry.v.lp !== undefined) {
-          prices.set(entry.n, entry.v.lp);
+          prices.set(entry.n, { lp: entry.v.lp, chp: entry.v.chp });
         }
       }
     }
@@ -99,16 +99,22 @@ module.exports = async (req, res) => {
     const out = {};
     for (const symbol in instrumentMap) {
       const { spotSymbol, futures } = instrumentMap[symbol];
+      const spot = prices.get(spotSymbol);
       out[symbol] = {
-        ltp: prices.has(spotSymbol) ? prices.get(spotSymbol) : null,
-        futures: futures.map((f) => (prices.has(f.symbol) ? prices.get(f.symbol) : null)),
+        ltp: spot ? spot.lp : null,
+        chp: spot && spot.chp !== undefined ? spot.chp : null,
+        futures: futures.map((f) => {
+          const p = prices.get(f.symbol);
+          return p ? p.lp : null;
+        }),
       };
     }
 
     const indices = {};
     for (const name in INDEX_SYMBOLS) {
       const symbol = INDEX_SYMBOLS[name];
-      indices[name] = prices.has(symbol) ? prices.get(symbol) : null;
+      const p = prices.get(symbol);
+      indices[name] = p ? p.lp : null;
     }
 
     res.status(200).json({ status: 'ok', quotes: out, indices });

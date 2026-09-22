@@ -129,8 +129,8 @@
   <div class="wrap">
     <nav class="nav-links">
       <a href="#" class="active">Arbitrage</a>
-      <a href="#" class="down">Down 15%</a>
-      <a href="#" class="up">Up 15%</a>
+      <a href="#" class="down">Top Losers</a>
+      <a href="#" class="up">Top Gainers</a>
       <a href="hiv-stocks.html">High IV</a>
     </nav>
     <div class="grid-toolbar-right">
@@ -172,6 +172,7 @@
             <tr>
               <th>Stock Name</th>
               <th>LTP</th>
+              <th>% Chg</th>
               <th>Lot Size</th>
               <th>CFP</th>
               <th>Near Month</th>
@@ -426,6 +427,7 @@
       return '<tr data-symbol="' + symbol + '">' +
         '<td>' + symbol + '</td>' +
         '<td class="price-pending c-ltp">—</td>' +
+        '<td class="price-pending c-chg">—</td>' +
         '<td>' + lot.toLocaleString('en-IN') + '</td>' +
         '<td class="price-pending c-fut0">—</td>' +
         '<td class="price-pending c-fut1">—</td>' +
@@ -449,6 +451,16 @@
     }
   }
 
+  // Unlike setCell (which colors by whether a value moved since the last
+  // poll), % change is already signed relative to prev close, so it's
+  // colored by its own sign rather than compared against the previous poll.
+  function setChangeCell(cell, value){
+    cell.classList.remove('price-pending', 'price-up', 'price-down');
+    cell.textContent = (value > 0 ? '+' : '') + value.toFixed(2) + '%';
+    if (value > 0) cell.classList.add('price-up');
+    else if (value < 0) cell.classList.add('price-down');
+  }
+
   function applyQuotes(quotes){
     Object.keys(quotes).forEach(function(symbol){
       var row = gridBody.querySelector('tr[data-symbol="' + symbol + '"]');
@@ -462,6 +474,13 @@
         next.ltp = q.ltp;
       } else {
         next.ltp = prev.ltp;
+      }
+
+      if (q.chp !== null && q.chp !== undefined) {
+        setChangeCell(row.querySelector('.c-chg'), q.chp);
+        next.chp = q.chp;
+      } else {
+        next.chp = prev.chp;
       }
 
       var futClasses = ['.c-fut0', '.c-fut1', '.c-fut2'];

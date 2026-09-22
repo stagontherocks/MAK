@@ -47,15 +47,22 @@ module.exports = async (req, res) => {
     const prices = new Map();
     for (const entry of data.d) {
       if (entry.s === 'ok' && entry.v && entry.v.lp !== undefined) {
-        prices.set(entry.n, entry.v.lp);
+        prices.set(entry.n, { lp: entry.v.lp, chp: entry.v.chp });
       }
     }
 
     const out = {};
     for (const symbol in instrumentMap) {
       const { futures } = instrumentMap[symbol];
+      // No separate spot instrument here (see trading.html's poll handler) --
+      // the front (nearest-expiry) future's own % change stands in for LTP's.
+      const front = futures[0] && prices.get(futures[0].symbol);
       out[symbol] = {
-        futures: futures.map((f) => (prices.has(f.symbol) ? prices.get(f.symbol) : null)),
+        futures: futures.map((f) => {
+          const p = prices.get(f.symbol);
+          return p ? p.lp : null;
+        }),
+        chp: front && front.chp !== undefined ? front.chp : null,
       };
     }
 

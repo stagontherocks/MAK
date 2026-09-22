@@ -204,7 +204,9 @@
   });
 
   var BATCH_LIMIT = 10;
-  var CACHE_KEY = 'topGainersCache_v1';
+  // Bumped to v2 when the `ath` field was added -- v1 caches predate it and
+  // would otherwise render blank ATH values until a manual Refresh.
+  var CACHE_KEY = 'topGainersCache_v2';
   var rows = [];
   var isScanning = false;
   var statusEl = document.getElementById('screenerStatus');

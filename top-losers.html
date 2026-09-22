@@ -204,7 +204,9 @@
   });
 
   var BATCH_LIMIT = 10;
-  var CACHE_KEY = 'topLosersCache_v1';
+  // Bumped to v2 when the `atl` field was added -- v1 caches predate it and
+  // would otherwise render blank ATL values until a manual Refresh.
+  var CACHE_KEY = 'topLosersCache_v2';
   var rows = [];
   var isScanning = false;
   var statusEl = document.getElementById('screenerStatus');

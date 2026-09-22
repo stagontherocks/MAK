@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Positions — GrabMyStone</title>
+<link rel="icon" href="images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:#111111;color:#eeeeee;
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+
+  .navbar{
+    position:sticky;top:0;z-index:100;
+    background:#111111;border-bottom:1px solid #262626;
+  }
+  .navbar .wrap{
+    height:58px;display:flex;align-items:center;justify-content:space-between;gap:24px;
+  }
+  .nav-links{display:flex;align-items:center;gap:8px}
+  .nav-links a{
+    padding:10px 16px;border-radius:999px;font-weight:600;font-size:13px;
+    color:#c2c2c2;text-decoration:none;transition:background .15s ease,color .15s ease;
+  }
+  .nav-links a:hover{background:#1c1c1c;color:#ffffff}
+  .nav-links a.up{color:#2ecc71}
+  .nav-links a.up:hover{background:rgba(46,204,113,.12)}
+  .nav-links a.down{color:#ff4d4f}
+  .nav-links a.down:hover{background:rgba(255,77,79,.12)}
+  .nav-links a.active{background:#1c1c1c;color:#ffffff}
+  .nav-links a.down.active{background:rgba(255,77,79,.15);color:#ff4d4f}
+  .nav-links a.up.active{background:rgba(46,204,113,.15);color:#2ecc71}
+
+  .connect-btn{
+    display:inline-flex;align-items:center;padding:9px 16px;border-radius:8px;
+    background:#2ecc71;color:#0d1f14;font-size:13px;font-weight:700;text-decoration:none;
+    transition:background .15s ease;
+  }
+  .connect-btn:hover{background:#3ee082}
+  .connect-btn.connected{background:#1c1c1c;color:#ff4d4f;border:1px solid #262626}
+  .connect-btn.connected:hover{background:rgba(255,77,79,.12)}
+
+  main{padding:20px 0}
+
+  .positions-toolbar{display:flex;align-items:center;justify-content:flex-end;margin-bottom:16px}
+  .add-strategy-btn{
+    display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:8px;
+    background:#2ecc71;color:#0d1f14;font-size:13px;font-weight:700;font-family:inherit;
+    border:none;cursor:pointer;transition:background .15s ease;
+  }
+  .add-strategy-btn:hover{background:#3ee082}
+
+  .grid-card{
+    background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
+  }
+  .empty-state{padding:48px 16px;text-align:center;color:#787878;font-size:13px;font-weight:600}
+
+  /* ---------- position rows ---------- */
+  /* not a <table> -- each row's stacked symbol+date on the left and the
+     future expandable detail panel below don't map cleanly onto table
+     cell semantics, so this is a plain flex row list instead, matching
+     the reference design's card-row layout. */
+  .position-row{
+    display:flex;align-items:center;gap:20px;padding:18px 20px;
+    border-bottom:1px solid #1e1e1e;cursor:pointer;
+  }
+  .position-row:last-child{border-bottom:none}
+  .position-row:hover{background:#1c1c1c}
+  .pr-name{flex:0 0 180px;min-width:0}
+  .pr-symbol{font-weight:700;font-size:15px}
+  .pr-date{font-size:12px;color:#787878;margin-top:3px}
+  .pr-price{flex:0 0 200px}
+  .pr-ltp{font-weight:700;font-size:15px}
+  .pr-chg{font-weight:700;font-size:15px;margin-left:6px}
+  .pr-status{flex:0 0 120px;display:flex;justify-content:center}
+  .status-dot{width:12px;height:12px;border-radius:50%}
+  .pr-pnl{flex:1;text-align:right;font-weight:700;font-size:15px}
+  .pr-chevron{
+    flex:0 0 20px;text-align:right;color:#787878;
+    transition:transform .15s ease;
+  }
+  .position-row.expanded .pr-chevron{transform:rotate(180deg)}
+  .pr-expand{
+    padding:0 20px 18px 20px;color:#787878;font-size:13px;
+    border-bottom:1px solid #1e1e1e;
+  }
+  .pr-expand:last-child{border-bottom:none}
+  .price-up{color:#2ecc71}
+  .price-down{color:#ff4d4f}
+</style>
+</head>
+<body>
+
+<header class="navbar">
+  <div class="wrap">
+    <nav class="nav-links">
+      <a href="trading.html">Arbitrage</a>
+      <a href="top-losers.html" class="down">Top Losers</a>
+      <a href="top-gainers.html" class="up">Top Gainers</a>
+      <a href="hiv-stocks.html">High IV</a>
+      <a href="watchlist.html">Watchlist</a>
+      <a href="positions.html" class="active">Positions</a>
+    </nav>
+    <a href="/api/fyers/login" class="connect-btn" id="connectBtn">Connect Broker</a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="positions-toolbar">
+      <!-- Placeholder for now -- strategy builder (add/track/view/update) is
+           coming in a later pass, this button intentionally has no handler yet. -->
+      <button type="button" class="add-strategy-btn">+ Add Strategy</button>
+    </div>
+    <div class="grid-card" id="positionsGrid"></div>
+  </div>
+</main>
+
+<script>
+  var connectBtn = document.getElementById('connectBtn');
+  function markBrokerConnected(){
+    if (connectBtn.classList.contains('connected')) return;
+    connectBtn.setAttribute('href', '/api/fyers/logout');
+    connectBtn.classList.add('connected');
+    connectBtn.textContent = 'Disconnect';
+  }
+  function markBrokerDisconnected(){
+    connectBtn.setAttribute('href', '/api/fyers/login');
+    connectBtn.classList.remove('connected');
+    connectBtn.textContent = 'Connect Broker';
+  }
+  fetch('/api/fyers/status').then(function(res){ return res.json(); }).then(function(body){
+    if (body && body.loggedIn) markBrokerConnected();
+  }).catch(function(){});
+  connectBtn.addEventListener('click', function(e){
+    if (!connectBtn.classList.contains('connected')) return;
+    e.preventDefault();
+    fetch('/api/fyers/logout').catch(function(){}).then(function(){ markBrokerDisconnected(); });
+  });
+
+  // Sample rows only -- there's no strategy data model yet (that's the
+  // builder/tracker work called out for a later pass). This just
+  // establishes the row layout against a couple of representative cases
+  // (profit and loss) until real data replaces it.
+  var SAMPLE_POSITIONS = [
+    { symbol: 'HDFCBANK', date: '10-Aug-2026 10:04', ltp: 742.85, chp: 0.24, statusColor: '#ff6b6b', pnl: 9113.00 },
+    { symbol: 'RELIANCE', date: '08-Aug-2026 14:22', ltp: 1451.85, chp: -1.12, statusColor: '#2ecc71', pnl: -3245.50 },
+  ];
+
+  var grid = document.getElementById('positionsGrid');
+
+  function fmtNum(value){
+    return value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  }
+  function pctClass(value){
+    return value > 0 ? 'price-up' : (value < 0 ? 'price-down' : '');
+  }
+
+  function renderPositions(positions){
+    if (positions.length === 0) {
+      grid.innerHTML = '<div class="empty-state">No strategies yet. Click "+ Add Strategy" to get started.</div>';
+      return;
+    }
+    grid.innerHTML = positions.map(function(p, i){
+      return '<div class="position-row" data-index="' + i + '">' +
+        '<div class="pr-name">' +
+          '<div class="pr-symbol">' + p.symbol + '</div>' +
+          '<div class="pr-date">' + p.date + '</div>' +
+        '</div>' +
+        '<div class="pr-price">' +
+          '<span class="pr-ltp">' + fmtNum(p.ltp) + '</span>' +
+          '<span class="pr-chg ' + pctClass(p.chp) + '">(' + (p.chp > 0 ? '+' : '') + p.chp.toFixed(2) + '%)</span>' +
+        '</div>' +
+        '<div class="pr-status"><span class="status-dot" style="background:' + p.statusColor + '"></span></div>' +
+        '<div class="pr-pnl ' + pctClass(p.pnl) + '">₹ ' + (p.pnl > 0 ? '+' : '') + fmtNum(p.pnl) + '</div>' +
+        '<div class="pr-chevron">⌄</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  // Chevron toggles a placeholder expand panel -- establishes the
+  // interaction pattern for the detail view that comes with the strategy
+  // builder work, without building that view yet.
+  grid.addEventListener('click', function(e){
+    var row = e.target.closest('.position-row');
+    if (!row) return;
+    var existing = row.nextElementSibling;
+    if (existing && existing.classList.contains('pr-expand')) {
+      existing.remove();
+      row.classList.remove('expanded');
+      return;
+    }
+    document.querySelectorAll('.pr-expand').forEach(function(el){ el.remove(); });
+    document.querySelectorAll('.position-row.expanded').forEach(function(el){ el.classList.remove('expanded'); });
+    var expand = document.createElement('div');
+    expand.className = 'pr-expand';
+    expand.textContent = 'Strategy details coming soon.';
+    row.after(expand);
+    row.classList.add('expanded');
+  });
+
+  renderPositions(SAMPLE_POSITIONS);
+</script>
+</body>
+</html>

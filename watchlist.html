@@ -139,6 +139,24 @@
   .ts-value{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
   .ts-sep{width:1px;height:16px;background:#262626}
 
+  .ts-toggle-group{display:flex;align-items:center;gap:8px;margin-left:auto}
+  .ts-toggle-label{
+    font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#787878;
+    transition:color .15s ease;
+  }
+  .ts-toggle-label.active{color:#eeeeee}
+  .ts-toggle{position:relative;display:inline-block;width:34px;height:19px;flex-shrink:0}
+  .ts-toggle input{opacity:0;width:0;height:0;position:absolute}
+  .ts-toggle-slider{
+    position:absolute;inset:0;background:#262626;border-radius:999px;cursor:pointer;transition:background .15s ease;
+  }
+  .ts-toggle-slider::before{
+    content:'';position:absolute;width:15px;height:15px;left:2px;top:2px;
+    background:#eeeeee;border-radius:50%;transition:transform .15s ease;
+  }
+  .ts-toggle input:checked + .ts-toggle-slider{background:#2ecc71}
+  .ts-toggle input:checked + .ts-toggle-slider::before{transform:translateX(15px)}
+
   .chain-expiries{
     display:flex;align-items:center;gap:8px;padding:12px 18px;border-bottom:1px solid #262626;
     position:relative;
@@ -274,6 +292,14 @@
               <div class="ts-item"><span class="ts-label">VIX</span><span class="ts-value" id="tsVix">—</span></div>
               <div class="ts-sep"></div>
               <div class="ts-item"><span class="ts-label">Fut</span><span class="ts-value" id="tsFut">—</span></div>
+              <div class="ts-toggle-group">
+                <span class="ts-toggle-label active" id="ivBasisSpotLabel">Spot</span>
+                <label class="ts-toggle">
+                  <input type="checkbox" id="ivBasisToggle">
+                  <span class="ts-toggle-slider"></span>
+                </label>
+                <span class="ts-toggle-label" id="ivBasisFutLabel">Futures</span>
+              </div>
             </div>
             <div class="chain-expiries" id="chainExpiries">
               <div id="expiryTabs" style="display:flex;gap:8px;flex-wrap:wrap;flex:1"></div>
@@ -532,6 +558,16 @@
   var tsSpot = document.getElementById('tsSpot');
   var tsVix = document.getElementById('tsVix');
   var tsFut = document.getElementById('tsFut');
+  var ivBasisToggle = document.getElementById('ivBasisToggle');
+  var ivBasisSpotLabel = document.getElementById('ivBasisSpotLabel');
+  var ivBasisFutLabel = document.getElementById('ivBasisFutLabel');
+  var useFutureForIv = false; // Intrinsic/Time Value basis -- spot by default, futures when toggled on
+  ivBasisToggle.addEventListener('change', function(){
+    useFutureForIv = ivBasisToggle.checked;
+    ivBasisSpotLabel.classList.toggle('active', !useFutureForIv);
+    ivBasisFutLabel.classList.toggle('active', useFutureForIv);
+    renderChain();
+  });
   var expiryTabsEl = document.getElementById('expiryTabs');
   var expiryMoreBtn = document.getElementById('expiryMoreBtn');
   var expiryDropdown = document.getElementById('expiryDropdown');
@@ -600,6 +636,11 @@
     var maxCallOi = rows.reduce(function(m, r){ return r.call ? Math.max(m, r.call.oi) : m; }, 0) || 1;
     var maxPutOi = rows.reduce(function(m, r){ return r.put ? Math.max(m, r.put.oi) : m; }, 0) || 1;
     var spot = chainData.spot;
+    // Intrinsic/Time Value can be computed against either spot or the front
+    // future (toggle in the top strip) -- everything else (ITM tint, ATM
+    // strike) still uses spot, since moneyness is conventionally spot-based
+    // regardless of which basis you want the IV/TV numbers calculated from.
+    var ivBasis = useFutureForIv ? chainData.future : spot;
 
     chainBody.innerHTML = rows.map(function(row){
       var call = row.call, put = row.put;
@@ -609,19 +650,19 @@
       var callOiPct = call ? Math.round((call.oi / maxCallOi) * 100) : 0;
       var putOiPct = put ? Math.round((put.oi / maxPutOi) * 100) : 0;
 
-      // Intrinsic Value (call) = max(Spot - Strike, 0); (put) = max(Strike -
-      // Spot, 0) -- computed independently per side, same as Delta already
+      // Intrinsic Value (call) = max(Basis - Strike, 0); (put) = max(Strike -
+      // Basis, 0) -- computed independently per side, same as Delta already
       // is, not just for whichever side happens to be ITM. An OTM side's
       // intrinsic is legitimately 0 (all premium is time value); only tint
-      // it like the rest of the row's ITM cells when that side is ITM.
+      // it like the rest of the row's ITM cells when that side is spot-ITM.
       var callIntrinsic = null, callTimeValue = null;
-      if (spot !== null && call) {
-        callIntrinsic = Math.max(spot - row.strike, 0);
+      if (ivBasis !== null && call) {
+        callIntrinsic = Math.max(ivBasis - row.strike, 0);
         callTimeValue = call.ltp - callIntrinsic;
       }
       var putIntrinsic = null, putTimeValue = null;
-      if (spot !== null && put) {
-        putIntrinsic = Math.max(row.strike - spot, 0);
+      if (ivBasis !== null && put) {
+        putIntrinsic = Math.max(row.strike - ivBasis, 0);
         putTimeValue = put.ltp - putIntrinsic;
       }
 

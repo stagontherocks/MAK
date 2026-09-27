@@ -4,7 +4,10 @@
 // codebase, and screenshot layouts vary too much for a fixed parser.
 // Raw fetch against the generateContent REST endpoint (no SDK), matching
 // this repo's existing zero-dependency style for the Fyers endpoints.
-const MODEL = 'gemini-2.5-flash'; // bump this if a newer Gemini model is available when you read this
+// gemini-2.5-flash was retired for new users -- Gemini's own API error told
+// us to move to this one. Bump again if Google retires this too by the time
+// you read this (check the error message, it names the replacement).
+const MODEL = 'gemini-3.8-flash';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 const PROMPT = `You are given a screenshot of a trading/options positions screen from a brokerage or options-analytics tool (e.g. Zerodha Kite, Opstra, a custom trade tracker). Extract every individual position/leg visible in the image.

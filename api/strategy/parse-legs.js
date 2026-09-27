@@ -1,13 +1,13 @@
 // Reads a pasted/uploaded screenshot of a broker or options-tool positions
 // screen (Kite mobile, Opstra, etc.) and extracts each leg as structured
-// JSON, using Claude's vision API -- there's no OCR anywhere in this
+// JSON, using Gemini's vision API -- there's no OCR anywhere in this
 // codebase, and screenshot layouts vary too much for a fixed parser.
-// Raw fetch against the Messages API (no SDK), matching this repo's
-// existing zero-dependency style for the Fyers endpoints.
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-haiku-4-5-20251001';
+// Raw fetch against the generateContent REST endpoint (no SDK), matching
+// this repo's existing zero-dependency style for the Fyers endpoints.
+const MODEL = 'gemini-2.5-flash'; // bump this if a newer Gemini model is available when you read this
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
-const SYSTEM_PROMPT = `You are given a screenshot of a trading/options positions screen from a brokerage or options-analytics tool (e.g. Zerodha Kite, Opstra, a custom trade tracker). Extract every individual position/leg visible in the image.
+const PROMPT = `You are given a screenshot of a trading/options positions screen from a brokerage or options-analytics tool (e.g. Zerodha Kite, Opstra, a custom trade tracker). Extract every individual position/leg visible in the image.
 
 For each leg, return:
 - "ticker": the contract description as shown or reconstructed (e.g. "HDFCBANK 29SEP2026 780CE", "RELIANCE 30OCT2026 1500PE", or a plain equity/futures ticker if that's all that's shown).
@@ -30,9 +30,9 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    res.status(500).json({ error: 'not_configured', message: 'ANTHROPIC_API_KEY is not set' });
+    res.status(500).json({ error: 'not_configured', message: 'GEMINI_API_KEY is not set' });
     return;
   }
 
@@ -47,36 +47,32 @@ module.exports = async (req, res) => {
     res.status(400).json({ error: 'invalid_image' });
     return;
   }
-  const [, mediaType, base64Data] = match;
+  const [, mimeType, base64Data] = match;
 
   try {
-    const anthropicRes = await fetch(ANTHROPIC_URL, {
+    const geminiRes = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 1536,
-        system: SYSTEM_PROMPT,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
-            { type: 'text', text: 'Extract the legs from this screenshot as instructed.' },
+        contents: [{
+          parts: [
+            { text: PROMPT },
+            { inline_data: { mime_type: mimeType, data: base64Data } },
           ],
         }],
+        // Gemini can be told to only emit JSON -- still stripped defensively
+        // below in case a future model wraps it in fences anyway.
+        generationConfig: { responseMimeType: 'application/json' },
       }),
     });
 
-    const body = await anthropicRes.json();
-    if (!anthropicRes.ok) {
-      throw new Error(`Anthropic API error: ${JSON.stringify(body)}`);
+    const body = await geminiRes.json();
+    if (!geminiRes.ok) {
+      throw new Error(`Gemini API error: ${JSON.stringify(body)}`);
     }
 
-    const text = body.content && body.content[0] && body.content[0].text;
+    const candidate = body.candidates && body.candidates[0];
+    const text = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0] && candidate.content.parts[0].text;
     if (!text) throw new Error('Empty response from model');
 
     const parsed = JSON.parse(stripJsonFences(text));

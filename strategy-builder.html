@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strategy Builder — GrabMyStone</title>
+<link rel="icon" href="images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:#111111;color:#eeeeee;
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+
+  .navbar{
+    position:sticky;top:0;z-index:100;
+    background:#111111;border-bottom:1px solid #262626;
+  }
+  .navbar .wrap{
+    height:58px;display:flex;align-items:center;justify-content:space-between;gap:24px;
+  }
+  .nav-links{display:flex;align-items:center;gap:8px}
+  .nav-links a{
+    padding:10px 16px;border-radius:999px;font-weight:600;font-size:13px;
+    color:#c2c2c2;text-decoration:none;transition:background .15s ease,color .15s ease;
+  }
+  .nav-links a:hover{background:#1c1c1c;color:#ffffff}
+  .nav-links a.up{color:#2ecc71}
+  .nav-links a.up:hover{background:rgba(46,204,113,.12)}
+  .nav-links a.down{color:#ff4d4f}
+  .nav-links a.down:hover{background:rgba(255,77,79,.12)}
+  .nav-links a.active{background:#1c1c1c;color:#ffffff}
+
+  .connect-btn{
+    display:inline-flex;align-items:center;padding:9px 16px;border-radius:8px;
+    background:#2ecc71;color:#0d1f14;font-size:13px;font-weight:700;text-decoration:none;
+    transition:background .15s ease;
+  }
+  .connect-btn:hover{background:#3ee082}
+  .connect-btn.connected{background:#1c1c1c;color:#ff4d4f;border:1px solid #262626}
+  .connect-btn.connected:hover{background:rgba(255,77,79,.12)}
+
+  main{padding:20px 0}
+
+  /* ---------- builder toolbar: script picker | save/reset/close | refreshed + view saved ---------- */
+  .builder-toolbar{
+    display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;margin-bottom:16px;
+  }
+  .toolbar-left{justify-self:start}
+  .toolbar-center{display:flex;align-items:center;gap:8px}
+  .toolbar-right{justify-self:end;display:flex;align-items:center;gap:12px}
+
+  .script-wrap{position:relative;width:260px}
+  .script-input{
+    background:#161616 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23787878" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>') no-repeat right 12px center/14px;
+    border:1px solid #262626;color:#eeeeee;
+    font-family:inherit;font-size:13px;font-weight:700;
+    padding:9px 34px 9px 14px;border-radius:8px;width:100%;cursor:pointer;
+  }
+  .script-input::placeholder{color:#787878;font-weight:500}
+  .script-input:hover{border-color:#3a3a3a}
+  .script-input:focus{outline:none;border-color:#4a4a4a;cursor:text}
+  .script-list{
+    position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:20;
+    background:#1a1a1a;border:1px solid #262626;border-radius:8px;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:320px;overflow-y:auto;
+  }
+  .script-list[hidden]{display:none}
+  .script-option{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:10px 14px;font-size:13px;font-weight:600;color:#eeeeee;cursor:pointer;
+  }
+  .script-option:hover,.script-option.highlighted{background:#262626}
+  .script-option.active{color:#4a90ff}
+  .script-option .lot{color:#787878;font-weight:500;font-size:12px}
+  .script-empty{padding:12px 14px;font-size:12px;color:#787878;font-weight:600}
+
+  .tb-btn{
+    padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;
+    cursor:pointer;border:1px solid #262626;background:#1a1a1a;color:#c2c2c2;
+    transition:background .15s ease,border-color .15s ease,color .15s ease;
+  }
+  .tb-btn:hover{border-color:#3a3a3a;color:#ffffff}
+  .tb-btn.primary{background:#2ecc71;border-color:#2ecc71;color:#0d1f14}
+  .tb-btn.primary:hover{background:#3ee082;border-color:#3ee082;color:#0d1f14}
+
+  .refreshed{font-size:12px;color:#787878;font-weight:600;white-space:nowrap}
+  .refreshed strong{color:#c2c2c2;font-weight:700;font-variant-numeric:tabular-nums}
+  .tb-sep{width:1px;height:18px;background:#262626}
+  .link-btn{
+    background:none;border:none;color:#4a90ff;font-family:inherit;font-size:13px;font-weight:700;
+    cursor:pointer;padding:4px 2px;
+  }
+  .link-btn:hover{color:#78adff}
+
+  /* ---------- two-column body ---------- */
+  .builder-columns{display:flex;align-items:flex-start;gap:20px}
+  .builder-left{flex:0 0 560px;min-width:0}
+  .builder-right{flex:1 1 auto;min-width:0}
+  .panel{
+    background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;min-height:400px;
+  }
+  .panel-empty{padding:48px 16px;text-align:center;color:#787878;font-size:13px;font-weight:600}
+
+  /* ---------- option-chain panel ---------- */
+  .chain-topstrip{
+    display:flex;align-items:center;gap:16px;padding:14px 18px;border-bottom:1px solid #262626;flex-wrap:wrap;
+  }
+  .ts-item{display:flex;align-items:baseline;gap:8px}
+  .ts-label{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#787878}
+  .ts-value{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+  .ts-sep{width:1px;height:16px;background:#262626}
+
+  .chain-expiries{
+    display:flex;align-items:center;gap:8px;padding:12px 18px;border-bottom:1px solid #262626;position:relative;
+  }
+  .expiry-tab{
+    padding:8px 14px;border-radius:8px;border:1px solid #262626;background:#1a1a1a;
+    color:#c2c2c2;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;
+  }
+  .expiry-tab:hover{border-color:#3a3a3a}
+  .expiry-tab.active{border-color:#4a90ff;color:#4a90ff;background:rgba(74,144,255,.1)}
+  .expiry-more-btn{
+    padding:8px 10px;border-radius:8px;border:1px solid #262626;background:#1a1a1a;
+    color:#c2c2c2;font-size:12px;cursor:pointer;
+  }
+  .expiry-more-btn:hover{border-color:#3a3a3a}
+  .expiry-dropdown{
+    position:absolute;top:calc(100% + 6px);right:18px;z-index:10;
+    background:#1a1a1a;border:1px solid #262626;border-radius:8px;overflow:hidden;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);min-width:160px;max-height:280px;overflow-y:auto;
+  }
+  .expiry-dropdown[hidden]{display:none}
+  .expiry-option{padding:10px 14px;font-size:13px;font-weight:600;color:#eeeeee;cursor:pointer;white-space:nowrap}
+  .expiry-option:hover,.expiry-option.active{background:#262626}
+
+  .chain-scroll{overflow:auto;max-height:calc(100vh - 330px);scrollbar-width:none;-ms-overflow-style:none}
+  .chain-scroll::-webkit-scrollbar{display:none}
+  .chain-table{width:100%;border-collapse:separate;border-spacing:0}
+  .chain-table thead th{
+    position:sticky;top:0;z-index:1;background:#1a1a1a;
+    font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#787878;
+    padding:10px 12px;border-bottom:1px solid #262626;white-space:nowrap;text-align:right;
+  }
+  .chain-table thead th.col-strike{text-align:center}
+  .chain-table thead th.col-left{text-align:left}
+  .chain-table tbody td{
+    padding:9px 12px;font-size:13px;text-align:right;border-bottom:1px solid #1e1e1e;
+    font-variant-numeric:tabular-nums;color:#eeeeee;white-space:nowrap;position:relative;
+  }
+  .chain-table tbody td.col-left{text-align:left}
+  .chain-table tbody tr:last-child td{border-bottom:none}
+  .chain-table tbody tr:hover td{background-color:#1c1c1c}
+  .cell-strike{
+    text-align:center !important;font-weight:700;background:#1a1a1a;
+    border-left:1px solid #262626;border-right:1px solid #262626;
+  }
+  .chain-table tbody tr.atm-row .cell-strike{background:rgba(74,144,255,.18);color:#4a90ff}
+  .chain-table tbody tr.atm-row td{background-color:rgba(74,144,255,.06)}
+  .cell-itm{background-color:rgba(255,214,64,.08)}
+  .cell-oi{width:26%}
+  .cell-oi-call{background-image:linear-gradient(to left, rgba(46,204,113,.25) var(--pct,0%), transparent var(--pct,0%))}
+  .cell-oi-put{background-image:linear-gradient(to right, rgba(255,77,79,.25) var(--pct,0%), transparent var(--pct,0%))}
+  .delta-call{color:#2ecc71}
+  .delta-put{color:#ff4d4f}
+
+  /* Buy/Sell pair revealed on row hover, one per side, sitting over that
+     side's OI bar next to the strike column. */
+  .bs-group{
+    position:absolute;top:50%;transform:translateY(-50%);display:none;gap:4px;
+  }
+  .cell-oi-call .bs-group{right:8px}
+  .cell-oi-put .bs-group{left:8px}
+  .chain-table tbody tr:hover .bs-group{display:flex}
+  .bs-btn{
+    width:24px;height:22px;border-radius:5px;border:none;cursor:pointer;
+    font-family:inherit;font-size:11px;font-weight:800;line-height:1;
+  }
+  .bs-btn.buy{background:#2ecc71;color:#0d1f14}
+  .bs-btn.buy:hover{background:#3ee082}
+  .bs-btn.sell{background:#ff4d4f;color:#ffffff}
+  .bs-btn.sell:hover{background:#ff6b6d}
+
+  .price-up{color:#2ecc71}
+  .price-down{color:#ff4d4f}
+
+  @media (max-width:1000px){
+    .builder-toolbar{grid-template-columns:1fr;justify-items:start}
+    .toolbar-right{justify-self:start}
+    .builder-columns{flex-direction:column}
+    .builder-left,.builder-right{flex-basis:auto;width:100%}
+  }
+
+  /* Fit-to-screen at desktop widths, same approach as watchlist.html: no
+     outer page scroll, only the chain table scrolls internally. */
+  @media (min-width:1000.01px){
+    html,body{height:100%}
+    body{height:100vh;overflow:hidden;display:flex;flex-direction:column}
+    .navbar{flex:0 0 auto}
+    main{flex:1 1 auto;min-height:0;display:flex}
+    main .wrap{flex:1;display:flex;flex-direction:column;min-height:0}
+    .builder-columns{flex:1;min-height:0;align-items:stretch}
+    .builder-left,.builder-right{display:flex;flex-direction:column;min-height:0}
+    .panel{display:flex;flex-direction:column;flex:1;min-height:0}
+    .panel-empty{flex:1;display:flex;align-items:center;justify-content:center}
+    .panel-empty[hidden]{display:none}
+    #chainContent{flex:1;display:flex;flex-direction:column;min-height:0}
+    #chainContent[hidden]{display:none}
+    .chain-scroll{flex:1;min-height:0;max-height:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="navbar">
+  <div class="wrap">
+    <nav class="nav-links">
+      <a href="trading.html">Arbitrage</a>
+      <a href="top-losers.html" class="down">Top Losers</a>
+      <a href="top-gainers.html" class="up">Top Gainers</a>
+      <a href="hiv-stocks.html">High IV</a>
+      <a href="watchlist.html">Watchlist</a>
+      <a href="positions.html" class="active">Positions</a>
+    </nav>
+    <a href="/api/fyers/login" class="connect-btn" id="connectBtn">Connect Broker</a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="builder-toolbar">
+      <div class="toolbar-left">
+        <div class="script-wrap">
+          <input type="text" class="script-input" id="scriptInput" placeholder="Select script..." aria-label="Select script" autocomplete="off">
+          <div class="script-list" id="scriptList" hidden></div>
+        </div>
+      </div>
+      <!-- Save / View Saved have no behavior yet -- what a saved builder
+           strategy looks like is still to be decided. -->
+      <div class="toolbar-center">
+        <button type="button" class="tb-btn primary" id="saveBtn">Save</button>
+        <button type="button" class="tb-btn" id="resetBtn">Reset</button>
+        <button type="button" class="tb-btn" id="closeBtn">Close</button>
+      </div>
+      <div class="toolbar-right">
+        <span class="refreshed">Last refreshed <strong id="lastRefreshed">—</strong></span>
+        <span class="tb-sep"></span>
+        <button type="button" class="link-btn" id="viewSavedBtn">View Saved</button>
+      </div>
+    </div>
+
+    <div class="builder-columns">
+      <div class="builder-left">
+        <div class="panel">
+          <div class="panel-empty" id="chainEmpty">Select a script to view its option chain.</div>
+          <div id="chainContent" hidden>
+            <div class="chain-topstrip">
+              <div class="ts-item"><span class="ts-label">Future</span><span class="ts-value" id="tsFut">—</span></div>
+              <div class="ts-sep"></div>
+              <div class="ts-item"><span class="ts-label">Spot</span><span class="ts-value" id="tsSpot">—</span></div>
+              <div class="ts-sep"></div>
+              <div class="ts-item"><span class="ts-label">IV</span><span class="ts-value" id="tsIv">—</span></div>
+            </div>
+            <div class="chain-expiries">
+              <div id="expiryTabs" style="display:flex;gap:8px;flex-wrap:wrap;flex:1"></div>
+              <button type="button" class="expiry-more-btn" id="expiryMoreBtn">▾</button>
+              <div class="expiry-dropdown" id="expiryDropdown" hidden></div>
+            </div>
+            <div class="chain-scroll">
+              <table class="chain-table">
+                <thead>
+                  <tr>
+                    <th class="col-left">Call Δ</th>
+                    <th>LTP</th>
+                    <th>OI</th>
+                    <th class="col-strike">Strike</th>
+                    <th class="col-left">OI</th>
+                    <th>LTP</th>
+                    <th>Put Δ</th>
+                  </tr>
+                </thead>
+                <tbody id="chainBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="builder-right">
+        <div class="panel">
+          <div class="panel-empty">Strategy legs and payoff will appear here.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  var connectBtn = document.getElementById('connectBtn');
+  function markBrokerConnected(){
+    if (connectBtn.classList.contains('connected')) return;
+    connectBtn.setAttribute('href', '/api/fyers/logout');
+    connectBtn.classList.add('connected');
+    connectBtn.textContent = 'Disconnect';
+  }
+  function markBrokerDisconnected(){
+    connectBtn.setAttribute('href', '/api/fyers/login');
+    connectBtn.classList.remove('connected');
+    connectBtn.textContent = 'Connect Broker';
+  }
+  fetch('/api/fyers/status').then(function(res){ return res.json(); }).then(function(body){
+    if (body && body.loggedIn) markBrokerConnected();
+  }).catch(function(){});
+  connectBtn.addEventListener('click', function(e){
+    if (!connectBtn.classList.contains('connected')) return;
+    e.preventDefault();
+    fetch('/api/fyers/logout').catch(function(){}).then(function(){ markBrokerDisconnected(); });
+  });
+
+  function fmtNum(value){
+    if (value === null || value === undefined) return '—';
+    return value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  }
+  function fmtDelta(value){
+    if (value === null || value === undefined) return '—';
+    return value.toFixed(2);
+  }
+  function pctClass(value){
+    if (value === null || value === undefined) return '';
+    return value > 0 ? 'price-up' : (value < 0 ? 'price-down' : '');
+  }
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function pad2(n){ return (n < 10 ? '0' : '') + n; }
+  function fmtTimestamp(d){
+    return pad2(d.getDate()) + '-' + MONTHS[d.getMonth()] + '-' + d.getFullYear() + ' ' +
+      pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+  }
+  // Expiry label with days-to-expiry, e.g. "27 Oct (28d)", matching the
+  // reference design's tabs.
+  function fmtExpiry(e){
+    var d = new Date(Number(e.expiry) * 1000);
+    var days = Math.max(0, Math.round((Number(e.expiry) * 1000 - Date.now()) / 86400000));
+    return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' (' + days + 'd)';
+  }
+
+  // ---------- Script picker ----------
+  // Same F&O + MCX universe as watchlist.html (MCX_ROWS duplicated there
+  // and in trading.html -- no shared source file for this list exists).
+  var MCX_ROWS = [['CRUDEOIL', 100], ['NATURALGAS', 1250], ['GOLDM', 10], ['SILVERM', 5]];
+  var allStocks = [];
+  var selectedSymbol = null;
+  var scriptInput = document.getElementById('scriptInput');
+  var scriptList = document.getElementById('scriptList');
+  var scriptMatches = [];
+  var highlightIdx = -1;
+
+  function renderScriptList(){
+    var term = scriptInput.value.trim().toUpperCase();
+    // With the input still showing the current selection, list everything
+    // rather than filtering down to just that one symbol.
+    if (term === selectedSymbol) term = '';
+    scriptMatches = allStocks.filter(function(s){ return !term || s[0].indexOf(term) !== -1; });
+    if (scriptMatches.length === 0) {
+      scriptList.innerHTML = '<div class="script-empty">' + (allStocks.length ? 'No matching script' : 'Loading scripts...') + '</div>';
+    } else {
+      scriptList.innerHTML = scriptMatches.map(function(s, i){
+        var cls = 'script-option' + (s[0] === selectedSymbol ? ' active' : '') + (i === highlightIdx ? ' highlighted' : '');
+        return '<div class="' + cls + '" data-symbol="' + s[0] + '">' +
+          '<span>' + s[0] + '</span><span class="lot">Lot ' + s[1].toLocaleString('en-IN') + '</span></div>';
+      }).join('');
+    }
+    scriptList.hidden = false;
+  }
+  function closeScriptList(){
+    scriptList.hidden = true;
+    highlightIdx = -1;
+    scriptInput.value = selectedSymbol || '';
+  }
+
+  scriptInput.addEventListener('focus', function(){ scriptInput.select(); highlightIdx = -1; renderScriptList(); });
+  scriptInput.addEventListener('input', function(){ highlightIdx = 0; renderScriptList(); });
+  scriptInput.addEventListener('keydown', function(e){
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!scriptMatches.length) return;
+      highlightIdx = e.key === 'ArrowDown'
+        ? Math.min(highlightIdx + 1, scriptMatches.length - 1)
+        : Math.max(highlightIdx - 1, 0);
+      renderScriptList();
+      var el = scriptList.querySelector('.highlighted');
+      if (el) el.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      var pick = scriptMatches[highlightIdx >= 0 ? highlightIdx : 0];
+      if (pick) selectSymbol(pick[0]);
+      scriptInput.blur();
+      closeScriptList();
+    } else if (e.key === 'Escape') {
+      scriptInput.blur();
+      closeScriptList();
+    }
+  });
+  scriptList.addEventListener('mousedown', function(e){
+    var opt = e.target.closest('.script-option');
+    if (!opt) return;
+    e.preventDefault(); // keep focus handling from racing the selection
+    selectSymbol(opt.getAttribute('data-symbol'));
+    scriptInput.blur();
+    closeScriptList();
+  });
+  document.addEventListener('click', function(e){
+    if (!e.target.closest('.script-wrap') && !scriptList.hidden) closeScriptList();
+  });
+
+  // ---------- Toolbar ----------
+  var lastRefreshedEl = document.getElementById('lastRefreshed');
+  document.getElementById('closeBtn').addEventListener('click', function(){
+    window.location.href = 'positions.html';
+  });
+  document.getElementById('resetBtn').addEventListener('click', function(){
+    selectSymbol(null);
+    scriptInput.value = '';
+  });
+
+  // ---------- Option chain ----------
+  var chainEmpty = document.getElementById('chainEmpty');
+  var chainContent = document.getElementById('chainContent');
+  var tsFut = document.getElementById('tsFut');
+  var tsSpot = document.getElementById('tsSpot');
+  var tsIv = document.getElementById('tsIv');
+  var expiryTabsEl = document.getElementById('expiryTabs');
+  var expiryMoreBtn = document.getElementById('expiryMoreBtn');
+  var expiryDropdown = document.getElementById('expiryDropdown');
+  var chainBody = document.getElementById('chainBody');
+  var chainScroll = document.querySelector('.chain-scroll');
+
+  var CHAIN_TAB_COUNT = 3;
+  var chainData = null;
+  var chainError = null;
+  var selectedExpiry = null;
+  var chainFetchToken = 0;
+  var chainNeedsScrollToAtm = true;
+
+  function selectSymbol(symbol){
+    if (symbol === selectedSymbol) return;
+    selectedSymbol = symbol;
+    selectedExpiry = null;
+    chainData = null;
+    chainError = null;
+    chainNeedsScrollToAtm = true;
+    lastRefreshedEl.textContent = '—';
+    scriptInput.value = symbol || '';
+    renderChain();
+    fetchChain();
+  }
+
+  function renderChain(){
+    if (!selectedSymbol || (!chainData && !chainError)) {
+      chainEmpty.textContent = selectedSymbol ? 'Loading option chain...' : 'Select a script to view its option chain.';
+      chainEmpty.hidden = false;
+      chainContent.hidden = true;
+      return;
+    }
+    if (!chainData && chainError) {
+      chainEmpty.textContent = chainError;
+      chainEmpty.hidden = false;
+      chainContent.hidden = true;
+      return;
+    }
+    chainEmpty.hidden = true;
+    chainContent.hidden = false;
+
+    tsFut.textContent = fmtNum(chainData.future);
+    tsFut.className = 'ts-value ' + pctClass(chainData.futureChp);
+    tsSpot.textContent = fmtNum(chainData.spot);
+    tsSpot.className = 'ts-value ' + pctClass(chainData.spotChp);
+    tsIv.textContent = chainData.atmIv !== null && chainData.atmIv !== undefined ? chainData.atmIv.toFixed(2) + '%' : '—';
+
+    var expiries = chainData.expiries || [];
+    var shown = expiries.slice(0, CHAIN_TAB_COUNT);
+    var overflow = expiries.slice(CHAIN_TAB_COUNT);
+    expiryTabsEl.innerHTML = shown.map(function(e){
+      var active = e.expiry === selectedExpiry ? ' active' : '';
+      return '<button type="button" class="expiry-tab' + active + '" data-expiry="' + e.expiry + '">' + fmtExpiry(e) + '</button>';
+    }).join('');
+    expiryMoreBtn.hidden = overflow.length === 0;
+    expiryDropdown.innerHTML = overflow.map(function(e){
+      var active = e.expiry === selectedExpiry ? ' active' : '';
+      return '<div class="expiry-option' + active + '" data-expiry="' + e.expiry + '">' + fmtExpiry(e) + '</div>';
+    }).join('');
+
+    var rows = chainData.rows || [];
+    var maxCallOi = rows.reduce(function(m, r){ return r.call ? Math.max(m, r.call.oi) : m; }, 0) || 1;
+    var maxPutOi = rows.reduce(function(m, r){ return r.put ? Math.max(m, r.put.oi) : m; }, 0) || 1;
+    var spot = chainData.spot;
+
+    // B/S buttons carry strike + side so the leg-building step can read
+    // them straight off the click target once it exists.
+    function bsGroup(side, strike){
+      return '<div class="bs-group">' +
+        '<button type="button" class="bs-btn buy" data-action="Buy" data-side="' + side + '" data-strike="' + strike + '" title="Buy">B</button>' +
+        '<button type="button" class="bs-btn sell" data-action="Sell" data-side="' + side + '" data-strike="' + strike + '" title="Sell">S</button>' +
+        '</div>';
+    }
+
+    chainBody.innerHTML = rows.map(function(row){
+      var call = row.call, put = row.put;
+      var callItm = spot !== null && row.strike < spot;
+      var putItm = spot !== null && row.strike > spot;
+      var atm = row.strike === chainData.atmStrike;
+      var callOiPct = call ? Math.round((call.oi / maxCallOi) * 100) : 0;
+      var putOiPct = put ? Math.round((put.oi / maxPutOi) * 100) : 0;
+      var ci = callItm ? ' cell-itm' : '', pi = putItm ? ' cell-itm' : '';
+      return '<tr class="' + (atm ? 'atm-row' : '') + '">' +
+        '<td class="col-left' + ci + '">' + (call ? '<span class="delta-call">' + fmtDelta(call.delta) + '</span>' : '—') + '</td>' +
+        '<td class="' + ci + '">' + (call ? fmtNum(call.ltp) : '—') + '</td>' +
+        '<td class="cell-oi cell-oi-call' + ci + '" style="--pct:' + callOiPct + '%">' + (call ? bsGroup('CE', row.strike) : '') + '</td>' +
+        '<td class="cell-strike">' + fmtNum(row.strike) + '</td>' +
+        '<td class="cell-oi cell-oi-put' + pi + '" style="--pct:' + putOiPct + '%">' + (put ? bsGroup('PE', row.strike) : '') + '</td>' +
+        '<td class="' + pi + '">' + (put ? fmtNum(put.ltp) : '—') + '</td>' +
+        '<td class="' + pi + '">' + (put ? '<span class="delta-put">' + fmtDelta(put.delta) + '</span>' : '—') + '</td>' +
+        '</tr>';
+    }).join('');
+
+    if (chainNeedsScrollToAtm) {
+      var atmEl = chainBody.querySelector('.atm-row');
+      // Set scrollTop directly rather than scrollIntoView, which also nudges
+      // the overflow:hidden panel ancestors and leaves rows peeking above
+      // the sticky header.
+      if (atmEl) chainScroll.scrollTop = atmEl.offsetTop - (chainScroll.clientHeight - atmEl.offsetHeight) / 2;
+      chainNeedsScrollToAtm = false;
+    }
+  }
+
+  expiryTabsEl.addEventListener('click', function(e){
+    var btn = e.target.closest('.expiry-tab');
+    if (!btn) return;
+    selectedExpiry = btn.getAttribute('data-expiry');
+    chainNeedsScrollToAtm = true;
+    fetchChain();
+  });
+  expiryMoreBtn.addEventListener('click', function(e){
+    e.stopPropagation();
+    expiryDropdown.hidden = !expiryDropdown.hidden;
+  });
+  expiryDropdown.addEventListener('click', function(e){
+    var opt = e.target.closest('.expiry-option');
+    if (!opt) return;
+    selectedExpiry = opt.getAttribute('data-expiry');
+    chainNeedsScrollToAtm = true;
+    expiryDropdown.hidden = true;
+    fetchChain();
+  });
+  document.addEventListener('click', function(e){
+    if (!e.target.closest('.chain-expiries')) expiryDropdown.hidden = true;
+  });
+
+  function fetchChain(){
+    if (!selectedSymbol) {
+      chainData = null;
+      chainError = null;
+      renderChain();
+      return;
+    }
+    var token = ++chainFetchToken;
+    var url = '/api/fyers/option-chain?symbol=' + encodeURIComponent(selectedSymbol) +
+      (selectedExpiry ? '&expiry=' + encodeURIComponent(selectedExpiry) : '');
+    fetch(url)
+      .then(function(res){
+        if (res.status === 401) markBrokerDisconnected(); else markBrokerConnected();
+        return res.json().then(function(body){ return { ok: res.ok, status: res.status, body: body }; });
+      })
+      .then(function(result){
+        if (token !== chainFetchToken) return;
+        if (result.ok && result.body && result.body.status === 'ok') {
+          chainData = result.body;
+          chainError = null;
+          if (!selectedExpiry) selectedExpiry = result.body.selectedExpiry;
+          lastRefreshedEl.textContent = fmtTimestamp(new Date());
+          renderChain();
+        } else if (!chainData) {
+          chainError = result.status === 401
+            ? 'Connect your broker to load the option chain.'
+            : (result.body && result.body.message) || 'Could not load the option chain for this script.';
+          renderChain();
+        }
+      })
+      .catch(function(){
+        if (!chainData && token === chainFetchToken) {
+          chainError = 'Could not load the option chain for this script.';
+          renderChain();
+        }
+      });
+  }
+
+  var CHAIN_POLL_MS = 6000;
+  function pollChain(){
+    if (selectedSymbol) fetchChain();
+    setTimeout(pollChain, CHAIN_POLL_MS);
+  }
+
+  renderChain();
+  setTimeout(pollChain, CHAIN_POLL_MS);
+
+  fetch('source/fo-stocks.json')
+    .then(function(res){ return res.json(); })
+    .then(function(stocks){
+      allStocks = stocks.concat(MCX_ROWS);
+      if (!scriptList.hidden) renderScriptList();
+    })
+    .catch(function(){ /* picker shows "Loading scripts..." until this loads */ });
+</script>
+</body>
+</html>

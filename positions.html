@@ -49,13 +49,14 @@
 
   main{padding:20px 0}
 
-  .positions-toolbar{display:flex;align-items:center;justify-content:flex-end;margin-bottom:16px}
+  .positions-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:16px}
   .add-strategy-btn{
     display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:8px;
     background:#2ecc71;color:#0d1f14;font-size:13px;font-weight:700;font-family:inherit;
     border:none;cursor:pointer;transition:background .15s ease;
   }
   .add-strategy-btn:hover{background:#3ee082}
+  a.add-strategy-btn{text-decoration:none}
 
   .grid-card{
     background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
@@ -249,7 +250,9 @@
 <main>
   <div class="wrap">
     <div class="positions-toolbar">
-      <button type="button" class="add-strategy-btn" id="addStrategyBtn">+ Add Strategy</button>
+      <!-- Add Strategy opens the option-chain builder page; the screenshot-based flow lives under Upload Strategy. -->
+      <a href="strategy-builder.html" class="add-strategy-btn" id="addStrategyBtn">+ Add Strategy</a>
+      <button type="button" class="add-strategy-btn" id="uploadStrategyBtn">Upload Strategy</button>
     </div>
     <div class="grid-card" id="positionsGrid"></div>
   </div>
@@ -261,7 +264,7 @@
 <div class="modal-overlay" id="strategyModalOverlay" hidden>
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="strategyModalHeading">
     <div class="modal-header">
-      <div class="modal-heading" id="strategyModalHeading">Add Strategy</div>
+      <div class="modal-heading" id="strategyModalHeading">Upload Strategy</div>
       <button type="button" class="modal-close-btn" id="strategyCloseBtn" aria-label="Close">&times;</button>
     </div>
 
@@ -369,7 +372,7 @@
 
   function renderPositions(positions){
     if (positions.length === 0) {
-      grid.innerHTML = '<div class="empty-state">No strategies yet. Click "+ Add Strategy" to get started.</div>';
+      grid.innerHTML = '<div class="empty-state">No strategies yet. Click "Upload Strategy" to get started.</div>';
       return;
     }
     grid.innerHTML = positions.map(function(p, i){
@@ -479,8 +482,8 @@
 
   renderPositions(SAMPLE_POSITIONS);
 
-  // ---------- Add Strategy modal ----------
-  var addStrategyBtn = document.getElementById('addStrategyBtn');
+  // ---------- Upload Strategy modal ----------
+  var uploadStrategyBtn = document.getElementById('uploadStrategyBtn');
   var modalOverlay = document.getElementById('strategyModalOverlay');
   var modalBox = document.querySelector('.modal-box');
   var modalError = document.getElementById('modalError');
@@ -570,7 +573,7 @@
     document.removeEventListener('paste', handleModalPaste);
   }
 
-  addStrategyBtn.addEventListener('click', openStrategyModal);
+  uploadStrategyBtn.addEventListener('click', openStrategyModal);
   strategyCancelBtn.addEventListener('click', closeStrategyModal);
   strategyCloseBtn.addEventListener('click', closeStrategyModal);
   strategyResetBtn.addEventListener('click', resetStrategyForm);

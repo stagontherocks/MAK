@@ -1,6 +1,6 @@
 const { getInstrumentMap } = require('./_contracts');
 const { getMcxInstrumentMap } = require('./_mcx_contracts');
-const { computeDelta } = require('./_blackscholes');
+const { computeDelta, impliedVol, RISK_FREE_RATE, MIN_T_YEARS } = require('./_blackscholes');
 
 const OPTION_CHAIN_URL = 'https://api-t1.fyers.in/data/options-chain-v3';
 const STRIKE_COUNT = 20;
@@ -135,6 +135,20 @@ module.exports = async (req, res) => {
         Math.abs(row.strike - spot) < Math.abs(best - spot) ? row.strike : best, rows[0].strike);
     }
 
+    // ATM IV for the strategy builder's top strip: average of the ATM
+    // call's and put's implied vols (either alone if the other can't be
+    // solved), as a percentage. Same fixed-rate assumption as delta.
+    let atmIv = null;
+    if (spot !== null && atmStrike !== null && selectedExpiry) {
+      const atmRow = rows.find((row) => row.strike === atmStrike);
+      const T = Math.max((Number(selectedExpiry) - Date.now() / 1000) / (365 * 24 * 3600), MIN_T_YEARS);
+      const ivs = [];
+      if (atmRow && atmRow.call) ivs.push(impliedVol(true, atmRow.call.ltp, spot, atmStrike, T, RISK_FREE_RATE));
+      if (atmRow && atmRow.put) ivs.push(impliedVol(false, atmRow.put.ltp, spot, atmStrike, T, RISK_FREE_RATE));
+      const solved = ivs.filter((v) => v !== null);
+      if (solved.length) atmIv = (solved.reduce((a, b) => a + b, 0) / solved.length) * 100;
+    }
+
     res.status(200).json({
       status: 'ok',
       symbol,
@@ -146,6 +160,7 @@ module.exports = async (req, res) => {
       callOi: data.callOi || 0,
       putOi: data.putOi || 0,
       atmStrike,
+      atmIv,
       expiries,
       selectedExpiry,
       rows,

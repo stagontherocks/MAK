@@ -3,6 +3,7 @@ const { getMcxInstrumentMap } = require('./_mcx_contracts');
 const { computeDelta, impliedVol, RISK_FREE_RATE, MIN_T_YEARS } = require('./_blackscholes');
 
 const OPTION_CHAIN_URL = 'https://api-t1.fyers.in/data/options-chain-v3';
+const QUOTES_URL = 'https://api-t1.fyers.in/data/quotes';
 const STRIKE_COUNT = 20;
 
 function parseCookies(req) {
@@ -49,6 +50,33 @@ function splitRows(optionsChain) {
   return { underlying, rows: Object.values(byStrike).sort((a, b) => a.strike - b.strike) };
 }
 
+// Live LTP for the script's futures contracts (up to 3: near/next/far),
+// for the strategy builder's futures dropdown. Best-effort -- a failure
+// here returns the contracts with null prices rather than failing the
+// whole option-chain response.
+async function fetchFutures(futureContracts, authHeader) {
+  const futures = futureContracts.map((f) => ({ symbol: f.symbol, expiry: f.expiry, ltp: null, chp: null }));
+  if (futures.length === 0) return futures;
+  try {
+    const url = `${QUOTES_URL}?symbols=${encodeURIComponent(futures.map((f) => f.symbol).join(','))}`;
+    const res = await fetch(url, { headers: { Authorization: authHeader, version: '2.0' } });
+    const data = await res.json();
+    if (!res.ok || data.s !== 'ok') return futures;
+    const bySymbol = {};
+    for (const entry of data.d || []) {
+      if (entry.s === 'ok' && entry.v) bySymbol[entry.n] = entry.v;
+    }
+    for (const f of futures) {
+      const v = bySymbol[f.symbol];
+      if (v && v.lp !== undefined) {
+        f.ltp = v.lp;
+        f.chp = v.chp !== undefined ? v.chp : null;
+      }
+    }
+  } catch (err) { /* keep null prices */ }
+  return futures;
+}
+
 module.exports = async (req, res) => {
   const cookies = parseCookies(req);
   const accessToken = cookies.fyers_session;
@@ -69,6 +97,7 @@ module.exports = async (req, res) => {
   try {
     const instrumentMap = await getInstrumentMap();
     let underlyingSymbol = instrumentMap[symbol] && instrumentMap[symbol].spotSymbol;
+    let futureContracts = (instrumentMap[symbol] && instrumentMap[symbol].futures) || [];
 
     // MCX commodities have no equity spot instrument -- their options are
     // written on the futures contract itself, so the front-month future
@@ -82,6 +111,7 @@ module.exports = async (req, res) => {
       const mcxInstrument = mcxMap[symbol];
       if (mcxInstrument && mcxInstrument.futures[0]) {
         underlyingSymbol = mcxInstrument.futures[0].symbol;
+        futureContracts = mcxInstrument.futures;
       }
     }
 
@@ -94,7 +124,10 @@ module.exports = async (req, res) => {
     if (expiryParam) url += `&timestamp=${encodeURIComponent(expiryParam)}`;
 
     const authHeader = `${appId}:${accessToken}`;
-    const fyersRes = await fetch(url, { headers: { Authorization: authHeader } });
+    const [fyersRes, futures] = await Promise.all([
+      fetch(url, { headers: { Authorization: authHeader } }),
+      fetchFutures(futureContracts.slice(0, 3), authHeader),
+    ]);
     const body = await fyersRes.json();
     if (!fyersRes.ok || body.s !== 'ok') {
       throw new Error(`Fyers option chain failed: ${JSON.stringify(body)}`);
@@ -156,6 +189,7 @@ module.exports = async (req, res) => {
       spotChp,
       future,
       futureChp,
+      futures,
       vix,
       callOi: data.callOi || 0,
       putOi: data.putOi || 0,

@@ -116,6 +116,45 @@
   .ts-value{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
   .ts-sep{width:1px;height:16px;background:#262626}
 
+  /* Futures picker: "FUT (29 Sep) 160.1 ▾" opens a small table of the
+     script's futures contracts (radio to pick which one the strip shows,
+     B/S on row hover). */
+  .fut-picker{position:relative}
+  .fut-trigger{
+    display:flex;align-items:baseline;gap:8px;background:none;border:none;cursor:pointer;
+    font-family:inherit;color:inherit;padding:4px 6px;margin:-4px -6px;border-radius:6px;
+  }
+  .fut-trigger:hover{background:#1c1c1c}
+  .fut-caret{color:#787878;font-size:11px;align-self:center}
+  .fut-menu{
+    position:absolute;top:calc(100% + 8px);left:-6px;z-index:15;
+    background:#1a1a1a;border:1px solid #262626;border-radius:8px;overflow:hidden;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);min-width:280px;
+  }
+  .fut-menu[hidden]{display:none}
+  .fut-table{width:100%;border-collapse:collapse}
+  .fut-table th{
+    font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#787878;
+    padding:10px 14px;border-bottom:1px solid #262626;text-align:left;white-space:nowrap;
+  }
+  .fut-table th.num{text-align:right}
+  .fut-table td{
+    padding:10px 14px;font-size:13px;font-weight:600;border-bottom:1px solid #1e1e1e;
+    font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  .fut-table tr:last-child td{border-bottom:none}
+  .fut-table tbody tr{cursor:pointer}
+  .fut-table tbody tr:hover td{background:#222222}
+  .fut-table td.num{text-align:right}
+  .fut-table td.fut-bs{width:74px}
+  .fut-radio{display:inline-flex;align-items:center;gap:10px}
+  .fut-radio::before{
+    content:'';width:14px;height:14px;border-radius:50%;border:1.5px solid #4a4a4a;box-sizing:border-box;flex-shrink:0;
+  }
+  .fut-table tr.selected .fut-radio::before{border:4px solid #4a90ff}
+  .fut-bs .bs-group{position:static;transform:none;display:flex;visibility:hidden}
+  .fut-table tbody tr:hover .fut-bs .bs-group{visibility:visible}
+
   .chain-expiries{
     display:flex;align-items:center;gap:8px;padding:12px 18px;border-bottom:1px solid #262626;position:relative;
   }
@@ -130,14 +169,16 @@
     color:#c2c2c2;font-size:12px;cursor:pointer;
   }
   .expiry-more-btn:hover{border-color:#3a3a3a}
+  .expiry-more-btn.active{border-color:#4a90ff;color:#4a90ff;background:rgba(74,144,255,.1);font-weight:700;font-family:inherit}
   .expiry-dropdown{
     position:absolute;top:calc(100% + 6px);right:18px;z-index:10;
     background:#1a1a1a;border:1px solid #262626;border-radius:8px;overflow:hidden;
     box-shadow:0 8px 24px rgba(0,0,0,.4);min-width:160px;max-height:280px;overflow-y:auto;
   }
   .expiry-dropdown[hidden]{display:none}
-  .expiry-option{padding:10px 14px;font-size:13px;font-weight:600;color:#eeeeee;cursor:pointer;white-space:nowrap}
-  .expiry-option:hover,.expiry-option.active{background:#262626}
+  .expiry-option{padding:10px 14px;font-size:13px;font-weight:600;color:#eeeeee;cursor:pointer;white-space:nowrap;letter-spacing:.02em}
+  .expiry-option:hover{background:#262626}
+  .expiry-option.active{background:rgba(74,144,255,.12);color:#4a90ff}
 
   .chain-scroll{overflow:auto;max-height:calc(100vh - 330px);scrollbar-width:none;-ms-overflow-style:none}
   .chain-scroll::-webkit-scrollbar{display:none}
@@ -260,7 +301,17 @@
           <div class="panel-empty" id="chainEmpty">Select a script to view its option chain.</div>
           <div id="chainContent" hidden>
             <div class="chain-topstrip">
-              <div class="ts-item"><span class="ts-label">Future</span><span class="ts-value" id="tsFut">—</span></div>
+              <div class="fut-picker" id="futPicker">
+                <button type="button" class="fut-trigger" id="futTrigger" aria-haspopup="true">
+                  <span class="ts-label" id="futLabel">Fut</span><span class="ts-value" id="tsFut">—</span><span class="fut-caret">▾</span>
+                </button>
+                <div class="fut-menu" id="futMenu" hidden>
+                  <table class="fut-table">
+                    <thead><tr><th>Expiry</th><th class="num">LTP</th><th></th></tr></thead>
+                    <tbody id="futBody"></tbody>
+                  </table>
+                </div>
+              </div>
               <div class="ts-sep"></div>
               <div class="ts-item"><span class="ts-label">Spot</span><span class="ts-value" id="tsSpot">—</span></div>
               <div class="ts-sep"></div>
@@ -268,7 +319,7 @@
             </div>
             <div class="chain-expiries">
               <div id="expiryTabs" style="display:flex;gap:8px;flex-wrap:wrap;flex:1"></div>
-              <button type="button" class="expiry-more-btn" id="expiryMoreBtn">▾</button>
+              <button type="button" class="expiry-more-btn" id="expiryMoreBtn" title="All expiries">▾</button>
               <div class="expiry-dropdown" id="expiryDropdown" hidden></div>
             </div>
             <div class="chain-scroll">
@@ -346,6 +397,25 @@
     var d = new Date(Number(e.expiry) * 1000);
     var days = Math.max(0, Math.round((Number(e.expiry) * 1000 - Date.now()) / 86400000));
     return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' (' + days + 'd)';
+  }
+  // Compact expiry label for the all-expiries dropdown, e.g. "06OCT2026".
+  function fmtExpiryCompact(ts){
+    var d = new Date(Number(ts) * 1000);
+    return pad2(d.getDate()) + MONTHS[d.getMonth()].toUpperCase() + d.getFullYear();
+  }
+  // Short expiry label for futures, e.g. "29 Sep".
+  function fmtExpiryShort(ts){
+    var d = new Date(Number(ts) * 1000);
+    return d.getDate() + ' ' + MONTHS[d.getMonth()];
+  }
+  // B/S buttons carry the instrument on data-* attributes so the
+  // leg-building step can read them straight off the click target once it
+  // exists: options get side CE/PE + strike, futures get side FUT + expiry.
+  function bsGroup(attrs){
+    return '<div class="bs-group">' +
+      '<button type="button" class="bs-btn buy" data-action="Buy"' + attrs + ' title="Buy">B</button>' +
+      '<button type="button" class="bs-btn sell" data-action="Sell"' + attrs + ' title="Sell">S</button>' +
+      '</div>';
   }
 
   // ---------- Script picker ----------
@@ -430,6 +500,10 @@
   var chainEmpty = document.getElementById('chainEmpty');
   var chainContent = document.getElementById('chainContent');
   var tsFut = document.getElementById('tsFut');
+  var futLabel = document.getElementById('futLabel');
+  var futTrigger = document.getElementById('futTrigger');
+  var futMenu = document.getElementById('futMenu');
+  var futBody = document.getElementById('futBody');
   var tsSpot = document.getElementById('tsSpot');
   var tsIv = document.getElementById('tsIv');
   var expiryTabsEl = document.getElementById('expiryTabs');
@@ -439,9 +513,23 @@
   var chainScroll = document.querySelector('.chain-scroll');
 
   var CHAIN_TAB_COUNT = 3;
+  // Expiry dropdown scope: weekly-expiry indices list their next 10
+  // expiries; everything else (stocks, BANKNIFTY -- monthly-only on NSE)
+  // lists expiries up to 10 months out. SENSEX is listed for when BSE
+  // contracts are added -- the app doesn't load them yet.
+  var WEEKLY_INDEX_SYMBOLS = ['NIFTY', 'SENSEX'];
+  var INDEX_EXPIRY_COUNT = 10;
+  var STOCK_EXPIRY_MONTHS = 10;
+  function dropdownExpiries(expiries){
+    if (WEEKLY_INDEX_SYMBOLS.indexOf(selectedSymbol) !== -1) return expiries.slice(0, INDEX_EXPIRY_COUNT);
+    var cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() + STOCK_EXPIRY_MONTHS);
+    return expiries.filter(function(e){ return Number(e.expiry) * 1000 <= cutoff.getTime(); });
+  }
   var chainData = null;
   var chainError = null;
   var selectedExpiry = null;
+  var selectedFutureIdx = 0; // which futures contract the top strip shows (near month by default)
   var chainFetchToken = 0;
   var chainNeedsScrollToAtm = true;
 
@@ -449,6 +537,8 @@
     if (symbol === selectedSymbol) return;
     selectedSymbol = symbol;
     selectedExpiry = null;
+    selectedFutureIdx = 0;
+    futMenu.hidden = true;
     chainData = null;
     chainError = null;
     chainNeedsScrollToAtm = true;
@@ -474,38 +564,35 @@
     chainEmpty.hidden = true;
     chainContent.hidden = false;
 
-    tsFut.textContent = fmtNum(chainData.future);
-    tsFut.className = 'ts-value ' + pctClass(chainData.futureChp);
+    renderFutures();
     tsSpot.textContent = fmtNum(chainData.spot);
     tsSpot.className = 'ts-value ' + pctClass(chainData.spotChp);
     tsIv.textContent = chainData.atmIv !== null && chainData.atmIv !== undefined ? chainData.atmIv.toFixed(2) + '%' : '—';
 
     var expiries = chainData.expiries || [];
     var shown = expiries.slice(0, CHAIN_TAB_COUNT);
-    var overflow = expiries.slice(CHAIN_TAB_COUNT);
     expiryTabsEl.innerHTML = shown.map(function(e){
       var active = e.expiry === selectedExpiry ? ' active' : '';
       return '<button type="button" class="expiry-tab' + active + '" data-expiry="' + e.expiry + '">' + fmtExpiry(e) + '</button>';
     }).join('');
-    expiryMoreBtn.hidden = overflow.length === 0;
-    expiryDropdown.innerHTML = overflow.map(function(e){
+    // The dropdown lists every in-scope expiry (not just the ones past the
+    // tabs), so it doubles as the expiry calendar.
+    var listed = dropdownExpiries(expiries);
+    expiryMoreBtn.hidden = listed.length === 0;
+    // When the selected expiry is past the tabs, name it on the dropdown
+    // button so it's still visible which expiry the chain is showing.
+    var pickedBeyondTabs = !shown.some(function(e){ return e.expiry === selectedExpiry; }) && selectedExpiry;
+    expiryMoreBtn.textContent = pickedBeyondTabs ? fmtExpiryCompact(selectedExpiry) + ' ▾' : '▾';
+    expiryMoreBtn.classList.toggle('active', !!pickedBeyondTabs);
+    expiryDropdown.innerHTML = listed.map(function(e){
       var active = e.expiry === selectedExpiry ? ' active' : '';
-      return '<div class="expiry-option' + active + '" data-expiry="' + e.expiry + '">' + fmtExpiry(e) + '</div>';
+      return '<div class="expiry-option' + active + '" data-expiry="' + e.expiry + '">' + fmtExpiryCompact(e.expiry) + '</div>';
     }).join('');
 
     var rows = chainData.rows || [];
     var maxCallOi = rows.reduce(function(m, r){ return r.call ? Math.max(m, r.call.oi) : m; }, 0) || 1;
     var maxPutOi = rows.reduce(function(m, r){ return r.put ? Math.max(m, r.put.oi) : m; }, 0) || 1;
     var spot = chainData.spot;
-
-    // B/S buttons carry strike + side so the leg-building step can read
-    // them straight off the click target once it exists.
-    function bsGroup(side, strike){
-      return '<div class="bs-group">' +
-        '<button type="button" class="bs-btn buy" data-action="Buy" data-side="' + side + '" data-strike="' + strike + '" title="Buy">B</button>' +
-        '<button type="button" class="bs-btn sell" data-action="Sell" data-side="' + side + '" data-strike="' + strike + '" title="Sell">S</button>' +
-        '</div>';
-    }
 
     chainBody.innerHTML = rows.map(function(row){
       var call = row.call, put = row.put;
@@ -518,9 +605,9 @@
       return '<tr class="' + (atm ? 'atm-row' : '') + '">' +
         '<td class="col-left' + ci + '">' + (call ? '<span class="delta-call">' + fmtDelta(call.delta) + '</span>' : '—') + '</td>' +
         '<td class="' + ci + '">' + (call ? fmtNum(call.ltp) : '—') + '</td>' +
-        '<td class="cell-oi cell-oi-call' + ci + '" style="--pct:' + callOiPct + '%">' + (call ? bsGroup('CE', row.strike) : '') + '</td>' +
+        '<td class="cell-oi cell-oi-call' + ci + '" style="--pct:' + callOiPct + '%">' + (call ? bsGroup(' data-side="CE" data-strike="' + row.strike + '"') : '') + '</td>' +
         '<td class="cell-strike">' + fmtNum(row.strike) + '</td>' +
-        '<td class="cell-oi cell-oi-put' + pi + '" style="--pct:' + putOiPct + '%">' + (put ? bsGroup('PE', row.strike) : '') + '</td>' +
+        '<td class="cell-oi cell-oi-put' + pi + '" style="--pct:' + putOiPct + '%">' + (put ? bsGroup(' data-side="PE" data-strike="' + row.strike + '"') : '') + '</td>' +
         '<td class="' + pi + '">' + (put ? fmtNum(put.ltp) : '—') + '</td>' +
         '<td class="' + pi + '">' + (put ? '<span class="delta-put">' + fmtDelta(put.delta) + '</span>' : '—') + '</td>' +
         '</tr>';
@@ -535,6 +622,45 @@
       chainNeedsScrollToAtm = false;
     }
   }
+
+  // Futures picker: falls back to the option-chain response's single
+  // front-future price if the futures list is missing/empty.
+  function renderFutures(){
+    var futures = chainData.futures || [];
+    if (selectedFutureIdx >= futures.length) selectedFutureIdx = 0;
+    var current = futures[selectedFutureIdx];
+    if (current) {
+      futLabel.textContent = 'Fut (' + fmtExpiryShort(current.expiry) + ')';
+      tsFut.textContent = fmtNum(current.ltp);
+      tsFut.className = 'ts-value ' + pctClass(current.chp);
+    } else {
+      futLabel.textContent = 'Fut';
+      tsFut.textContent = fmtNum(chainData.future);
+      tsFut.className = 'ts-value ' + pctClass(chainData.futureChp);
+    }
+    futBody.innerHTML = futures.length ? futures.map(function(f, i){
+      return '<tr data-idx="' + i + '"' + (i === selectedFutureIdx ? ' class="selected"' : '') + '>' +
+        '<td><span class="fut-radio">' + fmtExpiryShort(f.expiry) + '</span></td>' +
+        '<td class="num ' + pctClass(f.chp) + '">' + fmtNum(f.ltp) + '</td>' +
+        '<td class="fut-bs">' + bsGroup(' data-side="FUT" data-expiry="' + f.expiry + '"') + '</td>' +
+        '</tr>';
+    }).join('') : '<tr><td colspan="3" style="color:#787878">No futures data</td></tr>';
+  }
+  futTrigger.addEventListener('click', function(e){
+    e.stopPropagation();
+    futMenu.hidden = !futMenu.hidden;
+  });
+  futBody.addEventListener('click', function(e){
+    if (e.target.closest('.bs-btn')) return; // B/S not wired yet -- don't treat as a row pick
+    var row = e.target.closest('tr[data-idx]');
+    if (!row) return;
+    selectedFutureIdx = Number(row.getAttribute('data-idx'));
+    renderFutures();
+    futMenu.hidden = true;
+  });
+  document.addEventListener('click', function(e){
+    if (!e.target.closest('.fut-picker')) futMenu.hidden = true;
+  });
 
   expiryTabsEl.addEventListener('click', function(e){
     var btn = e.target.closest('.expiry-tab');

@@ -75,7 +75,8 @@
   .position-row:last-child{border-bottom:none}
   .position-row:hover{background:#1c1c1c}
   .pr-name{flex:0 0 180px;min-width:0}
-  .pr-symbol{font-weight:700;font-size:15px}
+  .pr-symbol{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pr-sub{font-size:11px;color:#787878;margin-top:2px}
   .pr-price{flex:0 0 200px}
   .pr-ltp{font-weight:700;font-size:15px}
   .pr-chg{font-weight:700;font-size:15px;margin-left:6px}
@@ -347,6 +348,9 @@
 
   var grid = document.getElementById('positionsGrid');
 
+  function escHtml(t){
+    return String(t).replace(/[&<>"]/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
+  }
   function fmtNum(value){
     if (value === null || value === undefined) return '—';
     return value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
@@ -363,7 +367,8 @@
     grid.innerHTML = list.map(function(p, i){
       return '<div class="position-row" data-index="' + i + '">' +
         '<div class="pr-name">' +
-          '<div class="pr-symbol">' + p.symbol + '</div>' +
+          '<div class="pr-symbol">' + escHtml(p.name || p.symbol) + '</div>' +
+          (p.name && p.name !== p.symbol ? '<div class="pr-sub">' + escHtml(p.symbol) + '</div>' : '') +
         '</div>' +
         '<div class="pr-price">' +
           '<span class="pr-ltp">' + (p.ltp !== null && p.ltp !== undefined ? fmtNum(p.ltp) : '—') + '</span>' +
@@ -474,6 +479,10 @@
       row.classList.remove('expanded');
       return;
     }
+    expandRow(row);
+  });
+
+  function expandRow(row){
     document.querySelectorAll('.pr-expand').forEach(function(el){ el.remove(); });
     document.querySelectorAll('.position-row.expanded').forEach(function(el){ el.classList.remove('expanded'); });
     var index = Number(row.getAttribute('data-index'));
@@ -482,7 +491,17 @@
     expand.innerHTML = renderLegTable(positions[index], index);
     row.after(expand);
     row.classList.add('expanded');
-  });
+  }
+  // Live refreshes re-render the grid; keep whichever row the user had open.
+  function renderKeepingExpansion(){
+    var open = grid.querySelector('.position-row.expanded');
+    var idx = open ? Number(open.getAttribute('data-index')) : -1;
+    renderPositions(positions);
+    if (idx >= 0) {
+      var row = grid.querySelector('.position-row[data-index="' + idx + '"]');
+      if (row) expandRow(row);
+    }
+  }
 
   grid.innerHTML = '<div class="empty-state">Loading strategies...</div>';
 
@@ -503,36 +522,42 @@
   // Builder strategy -> the grid's row shape. Qty is signed (Sell negative)
   // and scaled by lot size and the builder's multiplier; P&L matches the
   // builder: open legs mark to their last saved LTP, closed legs to exit.
-  function fromBuilder(row, lotBySymbol){
-    var d = row.data || {};
-    var lot = d.lotSize || lotBySymbol[d.symbol] || 1;
-    var mult = d.multiplier || 1;
-    var legs = (d.legs || []).filter(function(l){ return l.entry !== null && l.entry !== undefined; }).map(function(l){
+  function computeBuilder(raw){
+    var legs = raw.legs.filter(function(l){ return l.entry !== null && l.entry !== undefined; }).map(function(l){
       var open = l.exitPrice === null || l.exitPrice === undefined;
       var sign = l.action === 'Buy' ? 1 : -1;
-      var qty = l.lots * lot * mult;
+      var qty = l.lots * raw.lot * raw.mult;
       var current = open ? l.ltp : l.exitPrice;
       var pnl = (current === null || current === undefined) ? 0 : (current - l.entry) * sign * qty;
       return {
-        ticker: d.symbol + ' ' + fmtExpiry(l.expiry) + ' ' + (l.type === 'FUT' ? 'FUT' : l.strike + l.type),
+        ticker: raw.symbol + ' ' + fmtExpiry(l.expiry) + ' ' + (l.type === 'FUT' ? 'FUT' : l.strike + l.type),
         tradeType: l.action, qty: sign * qty, entryPrice: l.entry,
         currentPrice: current === undefined ? null : current,
         exitPrice: open ? null : l.exitPrice, pnl: pnl,
         statusColor: open ? '#2ecc71' : '#888888',
       };
     });
-    var total = legs.reduce(function(sum, l){ return sum + l.pnl; }, 0);
     return {
-      id: row.id, builder: true, name: row.name, symbol: d.symbol || row.name,
-      date: fmtStoredDate(row.updated_at), ltp: null, chp: null,
+      legs: legs,
+      pnl: legs.reduce(function(sum, l){ return sum + l.pnl; }, 0),
       statusColor: legs.some(function(l){ return l.exitPrice === null; }) ? '#2ecc71' : '#888888',
-      pnl: total, createdAt: fmtStoredDate(row.created_at || row.updated_at), modifiedAt: fmtStoredDate(row.updated_at),
-      greeks: { delta: 0, theta: 0, gamma: 0, vega: 0 }, legs: legs,
+    };
+  }
+  function fromBuilder(row, lotBySymbol){
+    var d = row.data || {};
+    var raw = { symbol: d.symbol || row.name, lot: d.lotSize || lotBySymbol[d.symbol] || 1, mult: d.multiplier || 1, legs: d.legs || [] };
+    var c = computeBuilder(raw);
+    return {
+      id: row.id, builder: true, raw: raw, name: row.name, symbol: raw.symbol,
+      date: fmtStoredDate(row.updated_at), ltp: null, chp: null,
+      statusColor: c.statusColor, pnl: c.pnl,
+      createdAt: fmtStoredDate(row.created_at || row.updated_at), modifiedAt: fmtStoredDate(row.updated_at),
+      greeks: { delta: 0, theta: 0, gamma: 0, vega: 0 }, legs: c.legs,
     };
   }
   function fromStore(row, lotBySymbol){
     var d = row.data || {};
-    if (d.kind === 'position' && d.position) return Object.assign({}, d.position, { id: row.id });
+    if (d.kind === 'position' && d.position) return Object.assign({}, d.position, { id: row.id, name: row.name });
     return fromBuilder(row, lotBySymbol);
   }
 
@@ -552,12 +577,87 @@
         positions = (body.strategies || []).map(function(row){ return fromStore(row, lotBySymbol); });
         renderPositions(positions);
         refreshUnderlyingQuotes();
+        pollLive();
       });
     }).catch(function(){
       grid.innerHTML = '<div class="empty-state">Could not load your strategies. Refresh to try again.</div>';
     });
   }
   loadPositions();
+
+  // ---------- Live leg prices ----------
+  // Same source the builder prices its legs from: the option-chain route,
+  // one call per distinct (script, expiry) among open legs (futures legs read
+  // the futures[] from any chain call for that script). Closed legs keep
+  // their exit price. Polls every LIVE_POLL_MS while the tab is visible.
+  var LIVE_POLL_MS = 10000;
+  var liveTimer = null;
+  function chainUrl(symbol, expiry){
+    return '/api/fyers/option-chain?symbol=' + encodeURIComponent(symbol) + (expiry ? '&expiry=' + encodeURIComponent(expiry) : '');
+  }
+  function pollLive(){
+    clearTimeout(liveTimer);
+    var schedule = function(){ liveTimer = setTimeout(pollLive, LIVE_POLL_MS); };
+    if (document.hidden) { schedule(); return; }
+    var jobs = {};
+    positions.forEach(function(p){
+      if (!p.raw) return;
+      p.raw.legs.forEach(function(l){
+        if (l.exitPrice !== null && l.exitPrice !== undefined) return;
+        var expiry = l.type === 'FUT' ? '' : String(l.expiry);
+        jobs[p.raw.symbol + '|' + expiry] = { symbol: p.raw.symbol, expiry: expiry };
+      });
+    });
+    var keys = Object.keys(jobs);
+    if (!keys.length) { schedule(); return; }
+    var chains = {};
+    var loggedOut = false;
+    keys.reduce(function(chain, key){
+      return chain.then(function(){
+        if (loggedOut) return;
+        var job = jobs[key];
+        return fetch(chainUrl(job.symbol, job.expiry)).then(function(res){
+          if (res.status === 401) { loggedOut = true; return; }
+          return res.json().then(function(body){ if (body && body.status === 'ok') chains[key] = body; });
+        }).catch(function(){});
+      });
+    }, Promise.resolve()).then(function(){
+      if (loggedOut) { markBrokerDisconnected(); return; } // stop polling until the page is reloaded after connecting
+      var changed = false;
+      positions.forEach(function(p){
+        if (!p.raw) return;
+        var anyChain = null;
+        p.raw.legs.forEach(function(l){
+          if (l.exitPrice !== null && l.exitPrice !== undefined) return;
+          var price = null;
+          if (l.type === 'FUT') {
+            var fc = chains[p.raw.symbol + '|'];
+            var f = fc && (fc.futures || []).filter(function(x){ return String(x.expiry) === String(l.expiry); })[0];
+            if (f && f.ltp !== null && f.ltp !== undefined) price = f.ltp;
+            if (fc) anyChain = fc;
+          } else {
+            var c = chains[p.raw.symbol + '|' + l.expiry];
+            var r = c && (c.rows || []).filter(function(x){ return x.strike === l.strike; })[0];
+            var side = r && (l.type === 'CE' ? r.call : r.put);
+            if (side && side.ltp !== null && side.ltp !== undefined) price = side.ltp;
+            if (c) anyChain = c;
+          }
+          if (price !== null && price !== l.ltp) { l.ltp = price; changed = true; }
+        });
+        if (anyChain) {
+          var u = anyChain.spot !== null && anyChain.spot !== undefined ? anyChain.spot : anyChain.future;
+          var uc = anyChain.spot !== null && anyChain.spot !== undefined ? anyChain.spotChp : anyChain.futureChp;
+          if (u !== null && u !== undefined && (u !== p.ltp || uc !== p.chp)) { p.ltp = u; p.chp = uc === undefined ? null : uc; changed = true; }
+        }
+        var c2 = computeBuilder(p.raw);
+        if (c2.pnl !== p.pnl) changed = true;
+        p.legs = c2.legs; p.pnl = c2.pnl; p.statusColor = c2.statusColor;
+      });
+      if (changed) renderKeepingExpansion();
+      schedule();
+    });
+  }
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden && positions.length) pollLive(); });
 
   // ---------- Upload Strategy modal ----------
   var uploadStrategyBtn = document.getElementById('uploadStrategyBtn');
@@ -796,7 +896,7 @@
           p.ltp = q.ltp;
           p.chp = q.chp !== undefined ? q.chp : null;
         });
-        renderPositions(positions);
+        renderKeepingExpansion();
       })
       .catch(function(){});
   }

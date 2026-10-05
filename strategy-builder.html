@@ -322,6 +322,10 @@
   }
   .leg-input:focus,.leg-select:focus{outline:none;border-color:#4a4a4a}
   .leg-input.lots{width:44px;text-align:center}
+  /* click-to-edit price cells (Entry, LTP/Exit) */
+  .leg-table td.editable{cursor:text}
+  .leg-table td.editable:hover{text-decoration:underline dotted #787878;text-underline-offset:4px}
+  .leg-input.price{width:76px;text-align:right}
   .leg-select{cursor:pointer}
   .stepper{display:inline-flex;align-items:center;gap:3px}
   .stepper .leg-input{width:62px;text-align:center}
@@ -1472,8 +1476,8 @@
             '<button type="button" class="step-btn" data-role="strike-up"' + (si !== -1 && si < strikes.length - 1 ? '' : ' disabled') + '>+</button></span>'
           : fmtNum(leg.strike))) + '</td>' +
         '<td><span class="type-chip ' + leg.type.toLowerCase() + '">' + leg.type + '</span></td>' +
-        '<td class="num">' + fmtNum(leg.entry) + '</td>' +
-        '<td class="num">' + fmtNum(open ? leg.ltp : leg.exitPrice) + '</td>' +
+        '<td class="num editable" data-role="edit-entry" title="Click to edit your entry price">' + fmtNum(leg.entry) + '</td>' +
+        '<td class="num editable" data-role="edit-exit" title="' + (open ? 'Live price. Click to exit these lots at your own price' : 'Click to edit your exit price (clear it to reopen the leg)') + '">' + fmtNum(open ? leg.ltp : leg.exitPrice) + '</td>' +
         '<td class="num ' + pctClass(pnl) + '">' + fmtRupee(pnl) + '</td>' +
         '<td><span class="exit-cell">' +
           (open ? '<select class="leg-select" data-role="exit-lots">' + exitLots + '</select>' +
@@ -1619,6 +1623,32 @@
     renderBuilder();
   }
 
+  // Exit `n` lots of an open leg at `price`. A partial exit splits the exited
+  // lots off as their own closed leg; closed legs stay in the table until
+  // the trash icon removes them.
+  function exitLeg(leg, n, price){
+    n = Math.min(Math.max(1, n), leg.lots);
+    if (n < leg.lots) {
+      var closed = Object.assign({}, leg, { id: ++legSeq, lots: n, exitPrice: price });
+      leg.lots -= n;
+      legs.splice(legs.indexOf(leg) + 1, 0, closed);
+    } else {
+      leg.exitPrice = price;
+    }
+  }
+
+  // Entry and LTP/Exit cells turn into an input on click, so the fills from
+  // the real trade can be typed in. Committed through the 'change' handler.
+  function startPriceEdit(td, leg, role){
+    if (td.querySelector('input')) return;
+    var value = role === 'edit-entry' ? leg.entry : (isOpen(leg) ? leg.ltp : leg.exitPrice);
+    td.innerHTML = '<input type="text" class="leg-input price" data-role="' + (role === 'edit-entry' ? 'entry-input' : 'exit-input') +
+      '" inputmode="decimal" value="' + (value === null || value === undefined ? '' : value) + '">';
+    var input = td.querySelector('input');
+    input.focus();
+    input.select();
+  }
+
   legScroll.addEventListener('click', function(e){
     var el = e.target.closest('[data-role]');
     if (!el) return;
@@ -1635,16 +1665,11 @@
       priceLegs();
     } else if (role === 'exit' && leg) {
       var exitSelect = e.target.closest('tr').querySelector('[data-role="exit-lots"]');
-      var n = Math.min(Number(exitSelect.value) || leg.lots, leg.lots);
       if (leg.ltp === null) return;
-      if (n < leg.lots) {
-        // Partial exit: split off the exited lots as their own closed leg.
-        var closed = Object.assign({}, leg, { id: ++legSeq, lots: n, exitPrice: leg.ltp });
-        leg.lots -= n;
-        legs.splice(legs.indexOf(leg) + 1, 0, closed);
-      } else {
-        leg.exitPrice = leg.ltp;
-      }
+      exitLeg(leg, Number(exitSelect.value) || leg.lots, leg.ltp);
+    } else if ((role === 'edit-entry' || role === 'edit-exit') && leg) {
+      startPriceEdit(el, leg, role);
+      return; // no re-render: the input must stay put
     } else if (role === 'delete' && leg) {
       legs.splice(legs.indexOf(leg), 1);
     } else {
@@ -1673,6 +1698,19 @@
         leg.entry = null;
         priceLegs();
       }
+    } else if (role === 'entry-input' && leg) {
+      var entryVal = parseFloat(el.value);
+      if (!isNaN(entryVal) && entryVal >= 0) leg.entry = entryVal;
+    } else if (role === 'exit-input' && leg) {
+      var raw = el.value.trim();
+      var exitVal = parseFloat(raw);
+      if (!isOpen(leg)) {
+        if (raw === '') leg.exitPrice = null;                  // clearing it reopens the leg
+        else if (!isNaN(exitVal) && exitVal >= 0) leg.exitPrice = exitVal;
+      } else if (!isNaN(exitVal) && exitVal >= 0 && String(exitVal) !== String(leg.ltp)) {
+        var lotsSel = el.closest('tr').querySelector('[data-role="exit-lots"]');
+        exitLeg(leg, Number(lotsSel && lotsSel.value) || leg.lots, exitVal);
+      }
     } else if (role === 'expiry' && leg) {
       leg.expiry = el.value;
       leg.entry = null;
@@ -1686,6 +1724,15 @@
   });
   legScroll.addEventListener('keydown', function(e){
     if (e.key === 'Enter' && e.target.classList.contains('leg-input')) e.target.blur();
+    if (e.key === 'Escape' && e.target.classList.contains('price')) {
+      e.target.value = e.target.defaultValue; // revert, so no 'change' fires
+      e.target.blur();
+    }
+  });
+  // Leaving a price box without changing it just restores the cell.
+  legScroll.addEventListener('focusout', function(e){
+    if (!e.target.classList.contains('price')) return;
+    setTimeout(function(){ if (!legScroll.contains(document.activeElement)) renderBuilder(); }, 0);
   });
 
   document.querySelector('.leg-tabs').addEventListener('click', function(e){

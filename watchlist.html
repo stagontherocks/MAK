@@ -337,11 +337,14 @@
   var connectBtn = document.getElementById('connectBtn');
   function markBrokerConnected(){
     if (connectBtn.classList.contains('connected')) return;
+    brokerConnected = true;
+    syncWatchlistFromServer();
     connectBtn.setAttribute('href', '/api/fyers/logout');
     connectBtn.classList.add('connected');
     connectBtn.textContent = 'Disconnect';
   }
   function markBrokerDisconnected(){
+    brokerConnected = false;
     connectBtn.setAttribute('href', '/api/fyers/login');
     connectBtn.classList.remove('connected');
     connectBtn.textContent = 'Connect Broker';
@@ -375,8 +378,38 @@
       return raw ? JSON.parse(raw) : [];
     } catch (err) { return []; }
   }
+  // localStorage is only a fast first-paint cache now; the saved list lives
+  // server-side (api/store/watchlist -> Supabase, keyed by the Fyers login)
+  // so it follows the login to any browser. Writes are skipped while
+  // disconnected so a logged-out visit can't clobber the saved list.
+  var brokerConnected = false;
   function saveWatchlist(){
     try { localStorage.setItem(WATCHLIST_KEY, JSON.stringify(watchlist)); } catch (err) {}
+    if (!brokerConnected) return;
+    fetch('/api/store/watchlist', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbols: watchlist })
+    }).catch(function(){});
+  }
+  // Called once connected: server list wins; if the server has none yet,
+  // this browser's existing list is uploaded (one-time migration).
+  function syncWatchlistFromServer(){
+    fetch('/api/store/watchlist').then(function(res){
+      if (!res.ok) throw new Error('sync failed');
+      return res.json();
+    }).then(function(body){
+      if (!body || !Array.isArray(body.symbols)) {
+        if (watchlist.length) saveWatchlist();
+        return;
+      }
+      watchlist = body.symbols;
+      try { localStorage.setItem(WATCHLIST_KEY, JSON.stringify(watchlist)); } catch (err) {}
+      if (selectedSymbol && watchlist.indexOf(selectedSymbol) === -1) selectedSymbol = null;
+      if (!selectedSymbol && watchlist.length > 0) selectSymbol(watchlist[0]);
+      renderGrid();
+      renderChain();
+    }).catch(function(){});
   }
 
   function fmtNum(value){

@@ -45,6 +45,31 @@
   .connect-btn.connected{background:#1c1c1c;color:#ff4d4f;border:1px solid #262626}
   .connect-btn.connected:hover{background:rgba(255,77,79,.12)}
 
+
+  /* ---------- saved strategies popover (Save name box / View Saved list) ---------- */
+  .toolbar-right,.toolbar-center{position:relative}
+  .sv-pop{
+    position:absolute;top:calc(100% + 8px);z-index:30;min-width:280px;
+    background:#1a1a1a;border:1px solid #262626;border-radius:8px;padding:12px;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);font-size:13px;color:#eeeeee;
+  }
+  .sv-pop[hidden]{display:none}
+  #savePop{left:0}
+  #savedPop{right:0;min-width:340px;max-height:360px;overflow-y:auto}
+  .sv-pop input{
+    width:100%;background:#161616;border:1px solid #262626;color:#eeeeee;border-radius:6px;
+    padding:8px 10px;font-family:inherit;font-size:13px;margin-bottom:8px;
+  }
+  .sv-pop input:focus{outline:none;border-color:#4a4a4a}
+  .sv-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #262626}
+  .sv-row:first-child{border-top:0}
+  .sv-row .sv-name{flex:1;min-width:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+  .sv-row .sv-name:hover{color:#78adff}
+  .sv-row .sv-meta{color:#787878;font-size:11px;white-space:nowrap}
+  .sv-row button{background:none;border:0;color:#ff4d4f;cursor:pointer;font-size:12px;font-family:inherit}
+  .sv-msg{color:#787878;padding:4px 0}
+  .sv-msg.err{color:#ff4d4f}
+
   main{padding:20px 0}
 
   /* ---------- builder toolbar: script picker | save/reset/close | refreshed + view saved ---------- */
@@ -376,10 +401,13 @@
           <div class="script-list" id="scriptList" hidden></div>
         </div>
       </div>
-      <!-- Save / View Saved have no behavior yet -- what a saved builder
-           strategy looks like is still to be decided. -->
       <div class="toolbar-center">
         <button type="button" class="tb-btn primary" id="saveBtn">Save</button>
+        <div class="sv-pop" id="savePop" hidden>
+          <input type="text" id="saveName" maxlength="120" placeholder="Strategy name" autocomplete="off">
+          <div class="sv-msg" id="saveMsg"></div>
+          <button type="button" class="tb-btn primary" id="saveConfirm">Save strategy</button>
+        </div>
         <button type="button" class="tb-btn" id="resetBtn">Reset</button>
         <button type="button" class="tb-btn" id="closeBtn">Close</button>
       </div>
@@ -387,6 +415,7 @@
         <span class="refreshed">Last refreshed <strong id="lastRefreshed">—</strong></span>
         <span class="tb-sep"></span>
         <button type="button" class="link-btn" id="viewSavedBtn">View Saved</button>
+        <div class="sv-pop" id="savedPop" hidden></div>
       </div>
     </div>
 
@@ -624,8 +653,113 @@
     window.location.href = 'positions.html';
   });
   document.getElementById('resetBtn').addEventListener('click', function(){
+    currentStrategyId = null;
     selectSymbol(null);
     scriptInput.value = '';
+  });
+
+
+  // ---------- Saved strategies (api/store/strategies -> Supabase, per Fyers login) ----------
+  var savePop = document.getElementById('savePop');
+  var savedPop = document.getElementById('savedPop');
+  var saveNameInput = document.getElementById('saveName');
+  var saveMsg = document.getElementById('saveMsg');
+  var currentStrategyId = null; // set once saved/loaded, so Save updates instead of duplicating
+
+  function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function apiStore(method, url, body){
+    return fetch(url, {
+      method: method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function(res){
+      return res.json().catch(function(){ return {}; }).then(function(data){
+        if (res.status === 401) { markBrokerDisconnected(); throw new Error('Connect Broker to save and view strategies.'); }
+        if (!res.ok) throw new Error(data.error || 'Request failed');
+        return data;
+      });
+    });
+  }
+
+  document.getElementById('saveBtn').addEventListener('click', function(){
+    savedPop.hidden = true;
+    if (!selectedSymbol || legs.length === 0) {
+      saveMsg.textContent = 'Add at least one leg before saving.';
+      saveMsg.className = 'sv-msg err';
+      document.getElementById('saveConfirm').hidden = true;
+      saveNameInput.hidden = true;
+    } else {
+      saveMsg.textContent = '';
+      saveMsg.className = 'sv-msg';
+      document.getElementById('saveConfirm').hidden = false;
+      saveNameInput.hidden = false;
+      if (!saveNameInput.value) saveNameInput.value = selectedSymbol + ' strategy';
+    }
+    savePop.hidden = !savePop.hidden;
+    if (!savePop.hidden && !saveNameInput.hidden) saveNameInput.select();
+  });
+  function doSave(){
+    var name = saveNameInput.value.trim();
+    if (!name) { saveMsg.textContent = 'Enter a name.'; saveMsg.className = 'sv-msg err'; return; }
+    saveMsg.textContent = 'Saving...'; saveMsg.className = 'sv-msg';
+    apiStore('POST', '/api/store/strategies', {
+      id: currentStrategyId || undefined,
+      name: name,
+      data: { symbol: selectedSymbol, multiplier: multiplier, legs: legs }
+    }).then(function(r){
+      currentStrategyId = r.id;
+      saveMsg.textContent = 'Saved.';
+      setTimeout(function(){ savePop.hidden = true; }, 700);
+    }).catch(function(err){ saveMsg.textContent = err.message; saveMsg.className = 'sv-msg err'; });
+  }
+  document.getElementById('saveConfirm').addEventListener('click', doSave);
+  saveNameInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') doSave(); });
+
+  function loadStrategy(item){
+    var d = item.data || {};
+    savedPop.hidden = true;
+    selectSymbol(null);            // force a fresh load even if same script is open
+    selectSymbol(d.symbol || null);
+    legs = (d.legs || []).map(function(l){ return Object.assign({}, l, { ltp: null }); });
+    legSeq = legs.reduce(function(m, l){ return Math.max(m, l.id || 0); }, 0);
+    currentStrategyId = item.id;
+    saveNameInput.value = item.name;
+    setMultiplier(d.multiplier || 1);
+    fetchLegChains();
+  }
+  function renderSaved(list){
+    if (!list.length) { savedPop.innerHTML = '<div class="sv-msg">No saved strategies yet.</div>'; return; }
+    savedPop.innerHTML = list.map(function(it, i){
+      var n = it.data && it.data.legs ? it.data.legs.length : 0;
+      return '<div class="sv-row"><span class="sv-name" data-i="' + i + '">' + esc(it.name) + '</span>' +
+        '<span class="sv-meta">' + esc((it.data && it.data.symbol) || '') + ' · ' + n + ' leg' + (n === 1 ? '' : 's') + '</span>' +
+        '<button type="button" data-del="' + i + '">Delete</button></div>';
+    }).join('');
+    savedPop.onclick = function(e){
+      var nameEl = e.target.closest('.sv-name');
+      var delEl = e.target.closest('[data-del]');
+      if (nameEl) loadStrategy(list[+nameEl.getAttribute('data-i')]);
+      if (delEl) {
+        var item = list[+delEl.getAttribute('data-del')];
+        apiStore('DELETE', '/api/store/strategies?id=' + encodeURIComponent(item.id)).then(function(){
+          if (currentStrategyId === item.id) currentStrategyId = null;
+          list.splice(list.indexOf(item), 1);
+          renderSaved(list);
+        }).catch(function(err){ savedPop.insertAdjacentHTML('afterbegin', '<div class="sv-msg err">' + esc(err.message) + '</div>'); });
+      }
+    };
+  }
+  document.getElementById('viewSavedBtn').addEventListener('click', function(){
+    savePop.hidden = true;
+    savedPop.hidden = !savedPop.hidden;
+    if (savedPop.hidden) return;
+    savedPop.innerHTML = '<div class="sv-msg">Loading...</div>';
+    apiStore('GET', '/api/store/strategies').then(function(r){ renderSaved(r.strategies || []); })
+      .catch(function(err){ savedPop.innerHTML = '<div class="sv-msg err">' + esc(err.message) + '</div>'; });
+  });
+  document.addEventListener('click', function(e){
+    if (!e.target.closest('.toolbar-center') && !savePop.hidden) savePop.hidden = true;
+    if (!e.target.closest('.toolbar-right') && !savedPop.hidden) savedPop.hidden = true;
   });
 
   // ---------- Option chain ----------
@@ -668,6 +802,7 @@
   function selectSymbol(symbol){
     if (symbol === selectedSymbol) return;
     selectedSymbol = symbol;
+    currentStrategyId = null; // a different script is a different strategy
     selectedExpiry = null;
     selectedFutureIdx = 0;
     futMenu.hidden = true;
@@ -931,7 +1066,7 @@
   // A leg: { id, action 'Buy'|'Sell', type 'CE'|'PE'|'FUT', expiry (unix s
   // string), strike (null for FUT), lots, entry, ltp, exitPrice (null while
   // open), included }. Entry is taken from the live LTP when the leg is added
-  // or its contract is changed; nothing is persisted yet (Save is unwired).
+  // or its contract is changed; Save/View Saved persist it server-side.
   var legs = [];
   var legSeq = 0;
   var multiplier = 1;

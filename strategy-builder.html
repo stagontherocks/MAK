@@ -727,6 +727,20 @@
     setMultiplier(d.multiplier || 1);
     fetchLegChains();
   }
+  // strategy-builder.html?id=<uuid> (Positions -> Analyze Trade) reopens that
+  // saved strategy exactly as View Saved -> click would.
+  function openStrategyFromUrl(){
+    var id = new URLSearchParams(window.location.search).get('id');
+    if (!id) return;
+    apiStore('GET', '/api/store?kind=strategies').then(function(r){
+      var item = (r.strategies || []).filter(function(it){ return it.id === id; })[0];
+      if (!item || !item.data || !item.data.legs) throw new Error('That saved strategy could not be found.');
+      loadStrategy(item);
+    }).catch(function(err){
+      savedPop.hidden = false;
+      savedPop.innerHTML = '<div class="sv-msg err">' + esc(err.message) + '</div>';
+    });
+  }
   function renderSaved(list){
     if (!list.length) { savedPop.innerHTML = '<div class="sv-msg">No saved strategies yet.</div>'; return; }
     savedPop.innerHTML = list.map(function(it, i){
@@ -1720,6 +1734,7 @@
     .then(function(stocks){
       allStocks = INDEX_ROWS.concat(stocks, MCX_ROWS);
       if (!scriptList.hidden) renderScriptList();
+      openStrategyFromUrl(); // needs allStocks: leg quantities depend on the lot size
     })
     .catch(function(){ /* picker shows "Loading scripts..." until this loads */ });
 </script>

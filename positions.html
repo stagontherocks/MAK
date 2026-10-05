@@ -142,6 +142,8 @@
     transition:background .15s ease;
   }
   .analyze-trade-btn:hover{background:#1c1c1c}
+  .analyze-trade-btn:disabled{opacity:.4;cursor:not-allowed}
+  .analyze-trade-btn:disabled:hover{background:#0d0d0d}
 
   /* ---------- add-strategy modal ---------- */
   .modal-overlay{
@@ -430,7 +432,9 @@
           '<span class="leg-meta-created">Created At: ' + strategy.createdAt + '</span>' +
           '<span class="leg-meta-modified">Modified At: ' + strategy.modifiedAt + '</span>' +
         '</div>' +
-        '<button type="button" class="analyze-trade-btn">Analyze Trade</button>' +
+        (strategy.builder
+          ? '<button type="button" class="analyze-trade-btn" data-id="' + strategy.id + '">Analyze Trade</button>'
+          : '<button type="button" class="analyze-trade-btn" disabled title="Uploaded strategies have no structured legs to open in the builder.">Analyze Trade</button>') +
       '</div>';
   }
 
@@ -438,6 +442,13 @@
   // whole strategy (event-delegated since the expand panel is created
   // dynamically as a sibling of its row, not a descendant).
   grid.addEventListener('click', function(e){
+    var analyzeBtn = e.target.closest('.analyze-trade-btn');
+    if (analyzeBtn) {
+      // Builder-saved strategies reopen in the builder, fully restored
+      // (script, legs, multiplier) -- see the ?id= handling there.
+      if (!analyzeBtn.disabled) window.location.href = 'strategy-builder.html?id=' + encodeURIComponent(analyzeBtn.getAttribute('data-id'));
+      return;
+    }
     var deleteBtn = e.target.closest('.leg-delete-btn');
     if (deleteBtn) {
       var delIdx = Number(deleteBtn.getAttribute('data-index'));
@@ -512,7 +523,7 @@
     });
     var total = legs.reduce(function(sum, l){ return sum + l.pnl; }, 0);
     return {
-      id: row.id, name: row.name, symbol: d.symbol || row.name,
+      id: row.id, builder: true, name: row.name, symbol: d.symbol || row.name,
       date: fmtStoredDate(row.updated_at), ltp: null, chp: null,
       statusColor: legs.some(function(l){ return l.exitPrice === null; }) ? '#2ecc71' : '#888888',
       pnl: total, createdAt: fmtStoredDate(row.created_at || row.updated_at), modifiedAt: fmtStoredDate(row.updated_at),

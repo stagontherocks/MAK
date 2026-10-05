@@ -476,7 +476,7 @@
               </div>
               <div class="payoff-details">
                 <div class="pd-item"><div class="pd-label">P&amp;L</div><div class="pd-value pnl-chip" id="pdPnl">—</div></div>
-                <!-- Needs the broker's margin API (SPAN + exposure); not wired yet. -->
+                <!-- From Fyers' margin calculator via /api/fyers/margin (SPAN + exposure, all included open legs together). -->
                 <div class="pd-item"><div class="pd-label">Est. Margin</div><div class="pd-value" id="pdMargin">—</div></div>
                 <div class="pd-item">
                   <div class="pd-label"><span>POP</span><span>Reward : Risk</span></div>
@@ -1061,6 +1061,7 @@
     maxProfit: document.getElementById('pdMaxProfit'),
     maxLoss: document.getElementById('pdMaxLoss'),
     breakevens: document.getElementById('pdBreakevens'),
+    margin: document.getElementById('pdMargin'),
   };
 
   // A leg: { id, action 'Buy'|'Sell', type 'CE'|'PE'|'FUT', expiry (unix s
@@ -1501,11 +1502,78 @@
       '</tbody></table>';
   }
 
+
+  // ---------- Est. Margin (Fyers margin calculator) ----------
+  // Asks the server for the margin of all included open legs as one basket
+  // (so spreads get SPAN netting). Only re-requested when the legs
+  // themselves change -- not on the 6s price polls -- and debounced so
+  // rapid edits collapse into one call.
+  var marginSig = null;
+  var marginTimer = null;
+  var marginRetryAt = 0;
+  function setMargin(text, title){
+    pd.margin.textContent = text;
+    pd.margin.title = title || '';
+  }
+  function updateMargin(){
+    var active = legs.filter(function(l){ return isOpen(l) && l.included; });
+    if (!selectedSymbol || active.length === 0) {
+      marginSig = null;
+      clearTimeout(marginTimer);
+      setMargin('—');
+      return;
+    }
+    var payload = {
+      symbol: selectedSymbol,
+      legs: active.map(function(l){
+        return { type: l.type, strike: l.strike, expiry: l.expiry, side: l.action, qty: legQty(l) };
+      })
+    };
+    var sig = JSON.stringify(payload);
+    if (sig === marginSig || Date.now() < marginRetryAt && sig === marginFailedSig) return;
+    marginSig = sig;
+    setMargin('…');
+    clearTimeout(marginTimer);
+    marginTimer = setTimeout(function(){
+      fetch('/api/fyers/margin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: sig
+      }).then(function(res){
+        if (res.status === 401) { markBrokerDisconnected(); return { status: 'login' }; }
+        return res.json().catch(function(){ return { status: 'error' }; });
+      }).then(function(body){
+        if (marginSig !== sig) return; // legs changed while this was in flight
+        if (body.status === 'ok' && body.margin !== null) {
+          setMargin(Math.round(body.margin).toLocaleString('en-IN'),
+            body.available !== null && body.available !== undefined ? 'Available funds: ' + Math.round(body.available).toLocaleString('en-IN') : '');
+        } else if (body.status === 'unsupported') {
+          setMargin('N/A', body.message);
+        } else if (body.status === 'login') {
+          setMargin('—', 'Connect Broker to see the estimated margin.');
+        } else {
+          setMargin('—', body.message || 'Could not fetch margin.');
+          marginFailedSig = sig;
+          marginRetryAt = Date.now() + 30000; // don't hammer Fyers on every poll while it's failing
+          marginSig = null;
+        }
+      }).catch(function(){
+        if (marginSig !== sig) return;
+        setMargin('—', 'Could not fetch margin.');
+        marginFailedSig = sig;
+        marginRetryAt = Date.now() + 30000;
+        marginSig = null;
+      });
+    }, 500);
+  }
+  var marginFailedSig = null;
+
   function renderBuilder(){
     if (legs.length === 0) {
       builderEmpty.hidden = false;
       builderContent.hidden = true;
       lastPayoff = null;
+      updateMargin();
       return;
     }
     builderEmpty.hidden = true;
@@ -1513,6 +1581,7 @@
     var p = computePayoff();
     renderPayoffChart(p);
     renderDetails(p);
+    updateMargin();
     // Don't rebuild the table under someone typing into a lots/strike box --
     // the 6s poll would wipe their edit. It catches up on the next render.
     if (!legScroll.contains(document.activeElement) || document.activeElement.tagName === 'BUTTON') {

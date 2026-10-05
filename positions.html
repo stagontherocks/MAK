@@ -333,14 +333,14 @@
     fetch('/api/fyers/logout').catch(function(){}).then(function(){ markBrokerDisconnected(); });
   });
 
-  // Strategies live server-side (api/store/strategies -> Supabase, keyed by
+  // Strategies live server-side (api/store, kind=strategies -> Supabase, keyed by
   // the Fyers login), so they follow the login to any browser. Two kinds of
   // row come back: ones saved from the strategy builder (data.legs, builder
   // leg shape) and ones from Upload Strategy (data.kind === 'position',
   // already in the shape the grid renders). Both are normalised into
   // `positions` below.
   var positions = [];
-  var STORE_URL = '/api/store/strategies';
+  var STORE_URL = '/api/store?kind=strategies';
   var MONTH_NAMES_UC = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
   var grid = document.getElementById('positionsGrid');
@@ -449,7 +449,7 @@
         renderPositions(positions);
       };
       if (!doomed.id) { afterDelete(); return; }
-      fetch(STORE_URL + '?id=' + encodeURIComponent(doomed.id), { method: 'DELETE' })
+      fetch(STORE_URL + '&id=' + encodeURIComponent(doomed.id), { method: 'DELETE' })
         .then(function(res){ if (!res.ok) throw new Error('delete failed'); afterDelete(); })
         .catch(function(){ deleteBtn.disabled = false; alert('Could not delete the strategy. Check your connection and try again.'); });
       return;

@@ -379,14 +379,14 @@
     } catch (err) { return []; }
   }
   // localStorage is only a fast first-paint cache now; the saved list lives
-  // server-side (api/store/watchlist -> Supabase, keyed by the Fyers login)
+  // server-side (api/store, kind=watchlist -> Supabase, keyed by the Fyers login)
   // so it follows the login to any browser. Writes are skipped while
   // disconnected so a logged-out visit can't clobber the saved list.
   var brokerConnected = false;
   function saveWatchlist(){
     try { localStorage.setItem(WATCHLIST_KEY, JSON.stringify(watchlist)); } catch (err) {}
     if (!brokerConnected) return;
-    fetch('/api/store/watchlist', {
+    fetch('/api/store?kind=watchlist', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ symbols: watchlist })
@@ -395,7 +395,7 @@
   // Called once connected: server list wins; if the server has none yet,
   // this browser's existing list is uploaded (one-time migration).
   function syncWatchlistFromServer(){
-    fetch('/api/store/watchlist').then(function(res){
+    fetch('/api/store?kind=watchlist').then(function(res){
       if (!res.ok) throw new Error('sync failed');
       return res.json();
     }).then(function(body){

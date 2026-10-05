@@ -659,7 +659,7 @@
   });
 
 
-  // ---------- Saved strategies (api/store/strategies -> Supabase, per Fyers login) ----------
+  // ---------- Saved strategies (api/store, kind=strategies -> Supabase, per Fyers login) ----------
   var savePop = document.getElementById('savePop');
   var savedPop = document.getElementById('savedPop');
   var saveNameInput = document.getElementById('saveName');
@@ -702,7 +702,7 @@
     var name = saveNameInput.value.trim();
     if (!name) { saveMsg.textContent = 'Enter a name.'; saveMsg.className = 'sv-msg err'; return; }
     saveMsg.textContent = 'Saving...'; saveMsg.className = 'sv-msg';
-    apiStore('POST', '/api/store/strategies', {
+    apiStore('POST', '/api/store?kind=strategies', {
       id: currentStrategyId || undefined,
       name: name,
       data: { symbol: selectedSymbol, multiplier: multiplier, lotSize: lotSize(), legs: legs }
@@ -741,7 +741,7 @@
       if (nameEl) loadStrategy(list[+nameEl.getAttribute('data-i')]);
       if (delEl) {
         var item = list[+delEl.getAttribute('data-del')];
-        apiStore('DELETE', '/api/store/strategies?id=' + encodeURIComponent(item.id)).then(function(){
+        apiStore('DELETE', '/api/store?kind=strategies&id=' + encodeURIComponent(item.id)).then(function(){
           if (currentStrategyId === item.id) currentStrategyId = null;
           list.splice(list.indexOf(item), 1);
           renderSaved(list);
@@ -754,7 +754,7 @@
     savedPop.hidden = !savedPop.hidden;
     if (savedPop.hidden) return;
     savedPop.innerHTML = '<div class="sv-msg">Loading...</div>';
-    apiStore('GET', '/api/store/strategies').then(function(r){ renderSaved(r.strategies || []); })
+    apiStore('GET', '/api/store?kind=strategies').then(function(r){ renderSaved(r.strategies || []); })
       .catch(function(err){ savedPop.innerHTML = '<div class="sv-msg err">' + esc(err.message) + '</div>'; });
   });
   document.addEventListener('click', function(e){

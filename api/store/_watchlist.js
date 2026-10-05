@@ -1,4 +1,4 @@
-// GET -> { symbols: [...] }   PUT {symbols:[...]} -> replaces the saved list.
+// (served via api/store/index.js) GET -> { symbols: [...] }   PUT {symbols:[...]} -> replaces the saved list.
 const { requireUser, sb } = require('./_store');
 
 module.exports = async (req, res) => {

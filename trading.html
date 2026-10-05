@@ -158,6 +158,7 @@
         <div class="toolbar-divider"></div>
         <div class="segment-toggle" id="segmentToggle">
           <button type="button" class="segment-btn active" data-segment="fno">F&amp;O</button>
+          <button type="button" class="segment-btn" data-segment="nifty50">Nifty 50</button>
           <button type="button" class="segment-btn" data-segment="mcx">MCX</button>
         </div>
       </div>
@@ -416,6 +417,18 @@
   // fo-stocks.json is for equities. GOLDM/SILVERM are the Mini contracts,
   // not the full-size GOLD/SILVER ones.
   var MCX_ROWS = [["CRUDEOIL", 100], ["NATURALGAS", 1250], ["GOLDM", 10], ["SILVERM", 5]];
+  // Nifty 50 constituents (NSE's official list, niftyindices.com
+  // ind_nifty50list.csv, as of Oct 2026). All 50 are F&O stocks, so the
+  // Nifty 50 view is just the F&O quotes feed filtered to these -- no
+  // separate endpoint. Update here when NSE reconstitutes the index
+  // (March / September).
+  var NIFTY50_SYMBOLS = ["ADANIENT","ADANIPORTS","APOLLOHOSP","ASIANPAINT","AXISBANK","BSE","BAJAJ-AUTO","BAJFINANCE","BAJAJFINSV","BEL","BHARTIARTL","CIPLA","COALINDIA","DRREDDY","EICHERMOT","ETERNAL","GRASIM","HCLTECH","HDFCBANK","HDFCLIFE","HINDALCO","HINDUNILVR","ICICIBANK","ITC","INFY","INDIGO","JSWSTEEL","JIOFIN","KOTAKBANK","LT","M&M","MARUTI","MAXHEALTH","NTPC","NESTLEIND","ONGC","POWERGRID","RELIANCE","SBILIFE","SHRIRAMFIN","SBIN","SUNPHARMA","TCS","TATACONSUM","TMPV","TATASTEEL","TECHM","TITAN","TRENT","ULTRACEMCO"];
+  var NIFTY50_SET = new Set(NIFTY50_SYMBOLS);
+  function rowsForSegment(segment){
+    if (segment === 'mcx') return MCX_ROWS;
+    if (segment === 'nifty50') return FNO_STOCKS_RESOLVED.filter(function(r){ return NIFTY50_SET.has(r[0]); });
+    return INDEX_ROWS.concat(FNO_STOCKS_RESOLVED);
+  }
 
   var gridBody = document.getElementById('gridBody');
   var lastPrices = {};
@@ -622,7 +635,7 @@
   });
 
   var QUOTE_POLL_MS = 6000;
-  var currentSegment = 'fno'; // 'fno' | 'mcx'
+  var currentSegment = 'fno'; // 'fno' | 'nifty50' | 'mcx' (nifty50 reuses the fno quotes endpoint)
   var pollTimer = null;
 
   function pollQuotes(){
@@ -666,7 +679,7 @@
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].classList.toggle('active', buttons[i].getAttribute('data-segment') === segment);
     }
-    renderRows(segment === 'mcx' ? MCX_ROWS : INDEX_ROWS.concat(FNO_STOCKS_RESOLVED));
+    renderRows(rowsForSegment(segment));
     applySearchFilter();
     if (pollTimer) clearTimeout(pollTimer);
     pollQuotes();

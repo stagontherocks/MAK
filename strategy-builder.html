@@ -705,7 +705,7 @@
     apiStore('POST', '/api/store/strategies', {
       id: currentStrategyId || undefined,
       name: name,
-      data: { symbol: selectedSymbol, multiplier: multiplier, legs: legs }
+      data: { symbol: selectedSymbol, multiplier: multiplier, lotSize: lotSize(), legs: legs }
     }).then(function(r){
       currentStrategyId = r.id;
       saveMsg.textContent = 'Saved.';

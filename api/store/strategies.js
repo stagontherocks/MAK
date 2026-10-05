@@ -1,4 +1,4 @@
-// GET            -> { strategies: [{id,name,data,updated_at}] }
+// GET            -> { strategies: [{id,name,data,created_at,updated_at}] }
 // POST {name,data[,id]} -> create, or update when id given -> { id }
 // DELETE ?id=... -> removes one
 const { requireUser, sb } = require('./_store');
@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
   const uid = encodeURIComponent(user);
   try {
     if (req.method === 'GET') {
-      const rows = await sb('GET', `strategies?fyers_id=eq.${uid}&select=id,name,data,updated_at&order=updated_at.desc`);
+      const rows = await sb('GET', `strategies?fyers_id=eq.${uid}&select=id,name,data,created_at,updated_at&order=updated_at.desc`);
       res.status(200).json({ strategies: rows || [] });
       return;
     }

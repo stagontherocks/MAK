@@ -1481,7 +1481,8 @@
         '<td class="num ' + pctClass(pnl) + '">' + fmtRupee(pnl) + '</td>' +
         '<td><span class="exit-cell">' +
           (open ? '<select class="leg-select" data-role="exit-lots">' + exitLots + '</select>' +
-            '<button type="button" class="icon-btn" data-role="exit" title="Exit at LTP">' + ICON_EXIT + '</button>' : '<span>Exited</span>') +
+            '<button type="button" class="icon-btn" data-role="exit" title="Exit at LTP">' + ICON_EXIT + '</button>' :
+            '<button type="button" class="icon-btn" data-role="undo-exit" title="Exited. Click to undo and reopen this leg">' + ICON_EXIT + '</button>') +
           '<button type="button" class="icon-btn danger" data-role="delete" title="Remove leg">' + ICON_TRASH + '</button>' +
         '</span></td>' +
         '</tr>';
@@ -1637,6 +1638,23 @@
     }
   }
 
+  // Undo of exitLeg: the leg goes back to being open and live-priced. If it
+  // was split off a partial exit, its lots rejoin the still-open leg of the
+  // same contract (when the entry prices agree) instead of leaving two
+  // identical rows.
+  function reopenLeg(leg){
+    leg.exitPrice = null;
+    var twin = legs.find(function(o){
+      return o !== leg && isOpen(o) && o.action === leg.action && o.type === leg.type && o.strike === leg.strike &&
+        String(o.expiry) === String(leg.expiry) && o.entry === leg.entry;
+    });
+    if (twin) {
+      twin.lots += leg.lots;
+      legs.splice(legs.indexOf(leg), 1);
+    }
+    priceLegs();
+  }
+
   // Entry and LTP/Exit cells turn into an input on click, so the fills from
   // the real trade can be typed in. Committed through the 'change' handler.
   function startPriceEdit(td, leg, role){
@@ -1667,6 +1685,8 @@
       var exitSelect = e.target.closest('tr').querySelector('[data-role="exit-lots"]');
       if (leg.ltp === null) return;
       exitLeg(leg, Number(exitSelect.value) || leg.lots, leg.ltp);
+    } else if (role === 'undo-exit' && leg) {
+      reopenLeg(leg);
     } else if ((role === 'edit-entry' || role === 'edit-exit') && leg) {
       startPriceEdit(el, leg, role);
       return; // no re-render: the input must stay put

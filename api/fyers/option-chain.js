@@ -4,7 +4,7 @@ const { computeDelta, impliedVol, RISK_FREE_RATE, MIN_T_YEARS } = require('./_bl
 
 const OPTION_CHAIN_URL = 'https://api-t1.fyers.in/data/options-chain-v3';
 const QUOTES_URL = 'https://api-t1.fyers.in/data/quotes';
-const STRIKE_COUNT = 40;
+const STRIKE_COUNT = 50;
 
 function parseCookies(req) {
   if (req.cookies) return req.cookies;

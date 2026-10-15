@@ -52,11 +52,21 @@
   .positions-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:16px}
   .add-strategy-btn{
     display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:8px;
-    background:#2ecc71;color:#0d1f14;font-size:13px;font-weight:700;font-family:inherit;
+    background:#2ecc71;color:#0d1f14;font-size:13px;font-weight:600;font-family:inherit;
     border:none;cursor:pointer;transition:background .15s ease;
   }
   .add-strategy-btn:hover{background:#3ee082}
   a.add-strategy-btn{text-decoration:none}
+  .toolbar-title{margin-right:auto;font-size:15px;font-weight:700}
+  .archive-btn{background:#1c1c1c;color:#e6e6e6;border:1px solid #262626}
+  .archive-btn:hover:not(:disabled){background:#262626}
+  .archive-btn:disabled{opacity:.45;cursor:not-allowed}
+  .pr-check{flex:0 0 auto;width:16px;height:16px;margin:0;accent-color:#2ecc71;cursor:pointer}
+  .leg-archive-btn{
+    border:none;background:transparent;color:#e6e6e6;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;
+    display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border-radius:6px;transition:background .15s ease;
+  }
+  .leg-archive-btn:hover{background:rgba(255,255,255,.1)}
 
   .grid-card{
     background:#161616;border:1px solid #262626;border-radius:10px;overflow:hidden;
@@ -244,7 +254,8 @@
       <a href="top-gainers.html" class="up">Top Gainers</a>
       <a href="hiv-stocks.html">High IV</a>
       <a href="watchlist.html">Watchlist</a>
-      <a href="positions.html" class="active">Positions</a>
+      <a href="positions.html" id="navPositions">Positions</a>
+      <a href="positions.html?view=archived" id="navArchived">Archived</a>
     </nav>
     <a href="/api/fyers/login" class="connect-btn" id="connectBtn">Connect Broker</a>
   </div>
@@ -254,6 +265,8 @@
   <div class="wrap">
     <div class="positions-toolbar">
       <!-- Add Strategy opens the option-chain builder page; the screenshot-based flow lives under Upload Strategy. -->
+      <span class="toolbar-title" id="archivedTitle" hidden>Archived Strategies</span>
+      <button type="button" class="add-strategy-btn archive-btn" id="bulkArchiveBtn" disabled>Archive</button>
       <a href="strategy-builder.html" class="add-strategy-btn" id="addStrategyBtn">+ Add Strategy</a>
       <button type="button" class="add-strategy-btn" id="uploadStrategyBtn">Upload Strategy</button>
     </div>
@@ -348,6 +361,55 @@
 
   var grid = document.getElementById('positionsGrid');
 
+  // Archiving is a flag inside the stored row's data (data.archived), so no
+  // schema/route change is needed. The Positions view shows non-archived
+  // rows, ?view=archived shows the rest; `positions` only ever holds the
+  // current view, so live polling and everything else ignore the other set.
+  var viewArchived = new URLSearchParams(location.search).get('view') === 'archived';
+  var allRows = {};   // id -> raw store row
+  var selected = {};  // id -> true, survives re-renders
+  var bulkBtn = document.getElementById('bulkArchiveBtn');
+  document.getElementById('navArchived').classList.toggle('active', viewArchived);
+  document.getElementById('navPositions').classList.toggle('active', !viewArchived);
+  if (viewArchived) {
+    document.getElementById('archivedTitle').hidden = false;
+    document.getElementById('addStrategyBtn').hidden = true;
+    document.getElementById('uploadStrategyBtn').hidden = true;
+  }
+  function selectedPositions(){ return positions.filter(function(p){ return p.id && selected[p.id]; }); }
+  function updateBulkBtn(){
+    var n = selectedPositions().length;
+    bulkBtn.disabled = n === 0;
+    bulkBtn.textContent = (viewArchived ? 'Restore' : 'Archive') + (n ? ' (' + n + ')' : '');
+  }
+  // Saves data.archived for each strategy (touch:false keeps Modified At),
+  // then drops the ones that saved from the current view.
+  function setArchived(list, flag){
+    return Promise.all(list.map(function(p){
+      var row = allRows[p.id];
+      var data = Object.assign({}, row.data || {});
+      if (flag) data.archived = true; else delete data.archived;
+      return fetch(STORE_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: p.id, name: row.name, data: data, touch: false })
+      }).then(function(res){
+        if (!res.ok) throw new Error('save failed');
+        row.data = data;
+        delete selected[p.id];
+        positions.splice(positions.indexOf(p), 1);
+      });
+    })).catch(function(){
+      alert('Could not update every strategy. Check your connection and try again.');
+      throw new Error('archive failed');
+    }).then(function(){ renderPositions(positions); });
+  }
+  bulkBtn.addEventListener('click', function(){
+    var list = selectedPositions();
+    if (!list.length) return;
+    bulkBtn.disabled = true;
+    setArchived(list, !viewArchived).catch(function(){ updateBulkBtn(); });
+  });
+
   function escHtml(t){
     return String(t).replace(/[&<>"]/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
   }
@@ -361,11 +423,15 @@
 
   function renderPositions(list){
     if (list.length === 0) {
-      grid.innerHTML = '<div class="empty-state">No strategies yet. Click "+ Add Strategy" or "Upload Strategy" to get started.</div>';
+      grid.innerHTML = '<div class="empty-state">' + (viewArchived
+        ? 'No archived strategies. Select strategies on the Positions page and click Archive.'
+        : 'No strategies yet. Click "+ Add Strategy" or "Upload Strategy" to get started.') + '</div>';
+      updateBulkBtn();
       return;
     }
     grid.innerHTML = list.map(function(p, i){
       return '<div class="position-row" data-index="' + i + '">' +
+        '<input type="checkbox" class="pr-check" data-index="' + i + '" aria-label="Select strategy"' + (p.id && selected[p.id] ? ' checked' : '') + (p.id ? '' : ' disabled') + '>' +
         '<div class="pr-name">' +
           '<div class="pr-symbol">' + escHtml(p.name || p.symbol) + '</div>' +
           (p.name && p.name !== p.symbol ? '<div class="pr-sub">' + escHtml(p.symbol) + '</div>' : '') +
@@ -381,6 +447,7 @@
         '<div class="pr-chevron">⌄</div>' +
         '</div>';
     }).join('');
+    updateBulkBtn();
   }
 
   function fmtSigned(value){
@@ -434,6 +501,7 @@
       '<div class="leg-footer-bar">' +
         '<div class="leg-footer-left">' +
           '<button type="button" class="leg-delete-btn" data-index="' + index + '" aria-label="Delete strategy">🗑</button>' +
+          (strategy.id ? '<button type="button" class="leg-archive-btn" data-index="' + index + '">' + (viewArchived ? '↩ Restore' : '🗄 Archive') + '</button>' : '') +
           '<span class="leg-meta-created">Created At: ' + strategy.createdAt + '</span>' +
           '<span class="leg-meta-modified">Modified At: ' + strategy.modifiedAt + '</span>' +
         '</div>' +
@@ -447,6 +515,21 @@
   // whole strategy (event-delegated since the expand panel is created
   // dynamically as a sibling of its row, not a descendant).
   grid.addEventListener('click', function(e){
+    var check = e.target.closest('.pr-check');
+    if (check) {
+      var cp = positions[Number(check.getAttribute('data-index'))];
+      if (cp && cp.id) { if (check.checked) selected[cp.id] = true; else delete selected[cp.id]; }
+      updateBulkBtn();
+      return;
+    }
+    var archiveBtn = e.target.closest('.leg-archive-btn');
+    if (archiveBtn) {
+      var ap = positions[Number(archiveBtn.getAttribute('data-index'))];
+      if (!ap) return;
+      archiveBtn.disabled = true;
+      setArchived([ap], !viewArchived).catch(function(){ archiveBtn.disabled = false; });
+      return;
+    }
     var analyzeBtn = e.target.closest('.analyze-trade-btn');
     if (analyzeBtn) {
       // Builder-saved strategies reopen in the builder, fully restored
@@ -574,7 +657,10 @@
       var lotBySymbol = { NIFTY: 65, BANKNIFTY: 30, CRUDEOIL: 100, NATURALGAS: 1250, GOLDM: 10, SILVERM: 5 };
       results[1].forEach(function(r){ lotBySymbol[r[0]] = r[1]; });
       return res.json().then(function(body){
-        positions = (body.strategies || []).map(function(row){ return fromStore(row, lotBySymbol); });
+        var rows = body.strategies || [];
+        rows.forEach(function(row){ allRows[row.id] = row; });
+        positions = rows.filter(function(row){ return !!(row.data && row.data.archived) === viewArchived; })
+          .map(function(row){ return fromStore(row, lotBySymbol); });
         renderPositions(positions);
         refreshUnderlyingQuotes();
         pollLive();
@@ -946,6 +1032,7 @@
       });
     }).then(function(body){
       strategy.id = body.id;
+      allRows[body.id] = { id: body.id, name: strategy.name || strategyNameInput.value.trim() || strategy.symbol, data: { kind: 'position', position: strategy } };
       positions.unshift(strategy);
       renderPositions(positions);
       closeStrategyModal();

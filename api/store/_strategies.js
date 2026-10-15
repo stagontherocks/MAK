@@ -1,5 +1,6 @@
 // GET            -> { strategies: [{id,name,data,created_at,updated_at}] }
-// POST {name,data[,id]} -> create, or update when id given -> { id }
+// POST {name,data[,id][,touch:false]} -> create, or update when id given -> { id }
+//   (touch:false leaves updated_at alone -- used when archiving/restoring)
 // DELETE ?id=... -> removes one
 const { requireUser, sb } = require('./_store');
 
@@ -16,7 +17,7 @@ module.exports = async (req, res) => {
       return;
     }
     if (req.method === 'POST') {
-      const { id, name, data } = req.body || {};
+      const { id, name, data, touch } = req.body || {};
       if (typeof name !== 'string' || !name.trim() || name.length > 120 || !data || typeof data !== 'object') {
         res.status(400).json({ error: 'name and data are required' });
         return;
@@ -27,7 +28,7 @@ module.exports = async (req, res) => {
       }
       if (id) {
         const rows = await sb('PATCH', `strategies?id=eq.${id}&fyers_id=eq.${uid}`,
-          { name: name.trim(), data, updated_at: new Date().toISOString() },
+          touch === false ? { name: name.trim(), data } : { name: name.trim(), data, updated_at: new Date().toISOString() },
           { Prefer: 'return=representation' });
         if (!rows || !rows.length) { res.status(404).json({ error: 'Not found' }); return; }
         res.status(200).json({ id });

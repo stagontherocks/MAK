@@ -2,7 +2,7 @@ const { getInstrumentMap } = require('./_contracts');
 
 const QUOTES_URL = 'https://api-t1.fyers.in/data/quotes';
 const CHUNK_SIZE = 50;
-const BATCH_CONCURRENCY = 8;
+const BATCH_CONCURRENCY = 4; // Fyers Standard plan: 5 requests/second
 const BATCH_SPACING_MS = 1000;
 
 // NSE index symbols, confirmed live against fyers.in/web/symbol/<sym>.
@@ -46,15 +46,23 @@ async function fetchChunk(symbols, authHeader) {
 
 // Fetches all symbols in groups of CHUNK_SIZE (Fyers' per-request cap),
 // running BATCH_CONCURRENCY chunks at a time with a pause between batches
-// so the whole poll stays under Fyers' 10 req/sec cap (see spec: ~17
-// chunks for ~839 symbols completes in ~2s this way).
+// so the whole poll stays under Fyers' 5 req/sec Standard-plan cap (~18
+// chunks at 4 per second take ~5s).
 async function fetchAllQuotes(symbols, authHeader) {
   const chunks = chunk(symbols, CHUNK_SIZE);
   const prices = new Map();
+  const failures = [];
 
   for (let i = 0; i < chunks.length; i += BATCH_CONCURRENCY) {
     const batch = chunks.slice(i, i + BATCH_CONCURRENCY);
-    const results = await Promise.all(batch.map((c) => fetchChunk(c, authHeader)));
+    // A chunk that fails (rate limit, one bad symbol rejecting its whole
+    // request) is retried once, then skipped -- one bad chunk must not blank
+    // every F&O row, only its own symbols.
+    const results = await Promise.all(batch.map((c) =>
+      fetchChunk(c, authHeader).catch(() => sleep(500).then(() => fetchChunk(c, authHeader))).catch((err) => {
+        failures.push(err.message);
+        return [];
+      })));
     for (const entries of results) {
       for (const entry of entries) {
         if (entry.s === 'ok' && entry.v && entry.v.lp !== undefined) {
@@ -65,6 +73,8 @@ async function fetchAllQuotes(symbols, authHeader) {
     if (i + BATCH_CONCURRENCY < chunks.length) await sleep(BATCH_SPACING_MS);
   }
 
+  if (failures.length === chunks.length) throw new Error(failures[0]);
+  if (failures.length) console.warn(`quotes: ${failures.length}/${chunks.length} chunks failed: ${failures[0]}`);
   return prices;
 }
 

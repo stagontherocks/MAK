@@ -635,7 +635,7 @@
     fetch('/api/fyers/logout').catch(function(){}).then(function(){ markBrokerDisconnected(); });
   });
 
-  var QUOTE_POLL_MS = 6000;
+  var QUOTE_POLL_MS = 60000; // 1 min: a full F&O poll is ~18 Fyers calls, and the Standard plan allows 5/s
   var currentSegment = 'fno'; // 'fno' | 'nifty50' | 'mcx' (nifty50 reuses the fno quotes endpoint)
   var pollTimer = null;
 

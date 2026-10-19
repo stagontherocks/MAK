@@ -1,3 +1,4 @@
+const { fyersFetch, memo } = require('./_fyers');
 // api/fyers/screener.js
 // High-IV screener: filters the 210 F&O stocks to ones down >=30% from
 // their own 6-month high, ranked by realized-volatility percentile -- a proxy for
@@ -93,14 +94,20 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchHistory(spotSymbol, authHeader) {
+// Daily candles barely change intraday and a rescan re-requests every stock,
+// so they're memoised (shared by the gainers/losers and high-IV scans).
+function fetchHistory(spotSymbol, authHeader) {
+  return memo(`history|${spotSymbol}|${HISTORY_RANGE_DAYS}`, 3 * 60 * 60 * 1000, () => fetchHistoryUncached(spotSymbol, authHeader));
+}
+
+async function fetchHistoryUncached(spotSymbol, authHeader) {
   const now = Math.floor(Date.now() / 1000);
   const from = now - HISTORY_RANGE_DAYS * 24 * 60 * 60;
   const params = new URLSearchParams({
     symbol: spotSymbol, resolution: 'D', date_format: '0',
     range_from: String(from), range_to: String(now), cont_flag: '1',
   });
-  const res = await fetch(`${HISTORY_URL}?${params}`, { headers: { Authorization: authHeader, version: '2.0' } });
+  const res = await fyersFetch(`${HISTORY_URL}?${params}`, { headers: { Authorization: authHeader, version: '2.0' } });
   const data = await res.json();
   if (!res.ok || data.s !== 'ok' || !Array.isArray(data.candles)) {
     throw new Error(`history fetch failed for ${spotSymbol}: HTTP ${res.status} ${JSON.stringify(data)}`);
@@ -114,7 +121,7 @@ async function fetchHistory(spotSymbol, authHeader) {
 async function fetchOptionIv(spotSymbol, authHeader) {
   try {
     const params = new URLSearchParams({ symbol: spotSymbol, strikecount: '1' });
-    const res = await fetch(`${OPTION_CHAIN_URL}?${params}`, { headers: { Authorization: authHeader, version: '2.0' } });
+    const res = await fyersFetch(`${OPTION_CHAIN_URL}?${params}`, { headers: { Authorization: authHeader, version: '2.0' } });
     const data = await res.json();
     if (!res.ok || data.s !== 'ok') return null;
     const chain = (data.data && Array.isArray(data.data.optionsChain)) ? data.data.optionsChain

@@ -259,7 +259,9 @@
     renderRows();
     statusEl.textContent = (cached.statusText || 'Loaded cached results.') + ' Click Refresh to rescan.';
   } else {
-    startScan();
+    // No auto-scan: a full run is ~212 Fyers data calls (of 5,000/day), and an
+    // interrupted run saves nothing, so reloads would repeat it. Explicit only.
+    statusEl.textContent = 'No screen yet. Click Refresh to run one (about 212 Fyers calls, takes a few minutes).';
   }
 </script>
 </body>

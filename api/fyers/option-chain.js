@@ -1,3 +1,4 @@
+const { fyersFetch, marketOpen, cachedHandler } = require('./_fyers');
 const { getInstrumentMap } = require('./_contracts');
 const { getMcxInstrumentMap } = require('./_mcx_contracts');
 const { computeDelta, impliedVol, RISK_FREE_RATE, MIN_T_YEARS } = require('./_blackscholes');
@@ -59,7 +60,7 @@ async function fetchFutures(futureContracts, authHeader) {
   if (futures.length === 0) return futures;
   try {
     const url = `${QUOTES_URL}?symbols=${encodeURIComponent(futures.map((f) => f.symbol).join(','))}`;
-    const res = await fetch(url, { headers: { Authorization: authHeader, version: '2.0' } });
+    const res = await fyersFetch(url, { headers: { Authorization: authHeader, version: '2.0' } });
     const data = await res.json();
     if (!res.ok || data.s !== 'ok') return futures;
     const bySymbol = {};
@@ -125,7 +126,7 @@ async function handleChain(req, res) {
 
     const authHeader = `${appId}:${accessToken}`;
     const [fyersRes, futures] = await Promise.all([
-      fetch(url, { headers: { Authorization: authHeader } }),
+      fyersFetch(url, { headers: { Authorization: authHeader } }),
       fetchFutures(futureContracts.slice(0, 3), authHeader),
     ]);
     const body = await fyersRes.json();
@@ -204,30 +205,15 @@ async function handleChain(req, res) {
   }
 }
 
-// Fyers Standard plan data-API budget is 50 req/min and 5,000/day, and each
-// chain costs 2 calls (chain + futures quotes). The builder, watchlist and
-// positions pages all poll chains, so successful responses are cached
-// briefly per symbol+expiry and shared between them.
-const CHAIN_TTL_MS = 25 * 1000;
-const chainCache = new Map(); // key -> { body, ts }
+// Each chain costs 2 Fyers data calls (chain + futures quotes) and the
+// builder, watchlist and positions pages all poll chains, so responses are
+// cached per symbol+expiry and shared between them: 50s while the market is
+// open (just under the 60s polls), 30 min when it can't move.
+const MCX_SYMBOLS = ['CRUDEOIL', 'NATURALGAS', 'GOLDM', 'SILVERM'];
+const isMcx = (req) => MCX_SYMBOLS.includes(String(req.query.symbol || '').toUpperCase());
 
-module.exports = async (req, res) => {
-  const token = parseCookies(req).fyers_session || '';
-  const key = `${token.slice(-12)}|${String(req.query.symbol || '').toUpperCase()}|${req.query.expiry || ''}`;
-  const hit = chainCache.get(key);
-  if (hit && Date.now() - hit.ts < CHAIN_TTL_MS) {
-    res.status(200).json(hit.body);
-    return;
-  }
-  let code = 200;
-  const wrapped = Object.create(res);
-  wrapped.status = (c) => { code = c; res.status(c); return wrapped; };
-  wrapped.json = (body) => {
-    if (code === 200) {
-      if (chainCache.size > 50) chainCache.clear();
-      chainCache.set(key, { body, ts: Date.now() });
-    }
-    return res.json(body);
-  };
-  return handleChain(req, wrapped);
-};
+module.exports = cachedHandler(handleChain, {
+  key: (req) => `${String(req.query.symbol || '').toUpperCase()}|${req.query.expiry || ''}`,
+  ttl: (req) => (marketOpen(isMcx(req)) ? 50 * 1000 : 30 * 60 * 1000),
+  parseCookies,
+});

@@ -3,6 +3,10 @@
 // Supabase's REST API with the server-only secret key. The browser never
 // sees a Supabase key.
 const PROFILE_URL = 'https://api-t1.fyers.in/api/v3/profile';
+// Every store call verified the session against Fyers; remember a good
+// verdict for a while so saves/loads don't each cost a profile call.
+const PROFILE_TTL_MS = 10 * 60 * 1000;
+const profileCache = new Map();
 
 function parseCookies(req) {
   if (req.cookies) return req.cookies;
@@ -26,6 +30,8 @@ async function requireUser(req, res) {
     return null;
   }
   try {
+    const cached = profileCache.get(token);
+    if (cached && Date.now() - cached.ts < PROFILE_TTL_MS) return cached.id;
     const r = await fetch(PROFILE_URL, { headers: { Authorization: `${appId}:${token}` } });
     const data = await r.json();
     const id = data && data.s === 'ok' && data.data && data.data.fy_id;
@@ -38,7 +44,9 @@ async function requireUser(req, res) {
       res.status(403).json({ error: 'Not authorised' });
       return null;
     }
-    return String(id).toUpperCase();
+    const fyId = String(id).toUpperCase();
+    profileCache.set(token, { id: fyId, ts: Date.now() });
+    return fyId;
   } catch (err) {
     res.status(502).json({ error: 'Could not verify broker session' });
     return null;

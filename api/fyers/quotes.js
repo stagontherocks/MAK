@@ -1,4 +1,5 @@
 const { getInstrumentMap } = require('./_contracts');
+const { fyersFetch, marketOpen } = require('./_fyers');
 
 const QUOTES_URL = 'https://api-t1.fyers.in/data/quotes';
 const CHUNK_SIZE = 50;
@@ -36,7 +37,7 @@ function sleep(ms) {
 
 async function fetchChunk(symbols, authHeader) {
   const url = `${QUOTES_URL}?symbols=${encodeURIComponent(symbols.join(','))}`;
-  const res = await fetch(url, { headers: { Authorization: authHeader, version: '2.0' } });
+  const res = await fyersFetch(url, { headers: { Authorization: authHeader, version: '2.0' } });
   const data = await res.json();
   if (!res.ok || data.s !== 'ok') {
     throw new Error(`Fyers quotes chunk failed: ${JSON.stringify(data)}`);
@@ -90,6 +91,7 @@ async function fetchAllQuotes(symbols, authHeader) {
 // a request to those F&O symbols (watchlist/positions need a handful, not
 // all ~210).
 const PRICE_TTL_MS = 100 * 1000;
+const PRICE_TTL_CLOSED_MS = 2 * 60 * 60 * 1000; // market shut: prices can't move
 const priceCache = new Map(); // fyers symbol -> { lp, chp, ts }
 let queue = Promise.resolve();
 
@@ -124,9 +126,10 @@ async function handle(req, res) {
     const uniqueSymbols = Array.from(new Set(symbols));
 
     const now = Date.now();
+    const ttl = marketOpen(false) ? PRICE_TTL_MS : PRICE_TTL_CLOSED_MS;
     const stale = uniqueSymbols.filter((sym) => {
       const c = priceCache.get(sym);
-      return !c || now - c.ts > PRICE_TTL_MS;
+      return !c || now - c.ts > ttl;
     });
     let isStale = false;
     if (stale.length) {

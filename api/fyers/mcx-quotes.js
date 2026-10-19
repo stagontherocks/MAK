@@ -1,3 +1,4 @@
+const { fyersFetch, marketOpen, cachedHandler } = require('./_fyers');
 const { getMcxInstrumentMap } = require('./_mcx_contracts');
 
 const QUOTES_URL = 'https://api-t1.fyers.in/data/quotes';
@@ -14,7 +15,7 @@ function parseCookies(req) {
   return out;
 }
 
-module.exports = async (req, res) => {
+async function handle(req, res) {
   const cookies = parseCookies(req);
   const accessToken = cookies.fyers_session;
   const appId = process.env.FYERS_APP_ID;
@@ -38,7 +39,7 @@ module.exports = async (req, res) => {
 
     const authHeader = `${appId}:${accessToken}`;
     const url = `${QUOTES_URL}?symbols=${encodeURIComponent(uniqueSymbols.join(','))}`;
-    const quoteRes = await fetch(url, { headers: { Authorization: authHeader, version: '2.0' } });
+    const quoteRes = await fyersFetch(url, { headers: { Authorization: authHeader, version: '2.0' } });
     const data = await quoteRes.json();
     if (!quoteRes.ok || data.s !== 'ok') {
       throw new Error(`Fyers quotes fetch failed: ${JSON.stringify(data)}`);
@@ -70,4 +71,12 @@ module.exports = async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: 'quote_fetch_failed', message: err.message });
   }
-};
+}
+
+// One call per poll, shared by every page/tab: 50s while MCX is open, 30 min
+// when it isn't (prices can't move).
+module.exports = cachedHandler(handle, {
+  key: () => 'mcx',
+  ttl: () => (marketOpen(true) ? 50 * 1000 : 30 * 60 * 1000),
+  parseCookies,
+});

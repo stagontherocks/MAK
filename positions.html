@@ -676,7 +676,19 @@
   // one call per distinct (script, expiry) among open legs (futures legs read
   // the futures[] from any chain call for that script). Closed legs keep
   // their exit price. Polls every LIVE_POLL_MS while the tab is visible.
-  var LIVE_POLL_MS = 10000;
+  // Fyers Standard plan data budget is 50 req/min and 5,000/day, so polling
+  // pauses outside trading hours (IST, Mon-Fri; NSE 09:00-15:35, MCX to
+  // 23:30). Holidays aren't modelled. Each page still fetches once on load.
+  function marketOpen(mcx){
+    var parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+    var get = function(t){ return parts.filter(function(x){ return x.type === t; })[0].value; };
+    var day = get('weekday');
+    if (day === 'Sat' || day === 'Sun') return false;
+    var mins = (Number(get('hour')) % 24) * 60 + Number(get('minute'));
+    return mins >= 540 && mins <= (mcx ? 1410 : 935);
+  }
+  var LIVE_POLL_MS = 60000;
+  var livePolledOnce = false;
   var liveTimer = null;
   function chainUrl(symbol, expiry){
     return '/api/fyers/option-chain?symbol=' + encodeURIComponent(symbol) + (expiry ? '&expiry=' + encodeURIComponent(expiry) : '');
@@ -684,7 +696,8 @@
   function pollLive(){
     clearTimeout(liveTimer);
     var schedule = function(){ liveTimer = setTimeout(pollLive, LIVE_POLL_MS); };
-    if (document.hidden) { schedule(); return; }
+    if (document.hidden || (livePolledOnce && !marketOpen(true))) { schedule(); return; }
+    livePolledOnce = true;
     var jobs = {};
     positions.forEach(function(p){
       if (!p.raw) return;
@@ -693,6 +706,14 @@
         var expiry = l.type === 'FUT' ? '' : String(l.expiry);
         jobs[p.raw.symbol + '|' + expiry] = { symbol: p.raw.symbol, expiry: expiry };
       });
+    });
+    // A futures leg only needs futures[], which every chain response for the
+    // symbol carries -- so its own chain request ('SYM|') is redundant when
+    // an option chain for the same symbol is being fetched anyway (each
+    // chain costs ~2 of Fyers' 5,000 data calls/day).
+    Object.keys(jobs).forEach(function(k){
+      var job = jobs[k];
+      if (job.expiry === '' && Object.keys(jobs).some(function(o){ return jobs[o].symbol === job.symbol && jobs[o].expiry !== ''; })) delete jobs[k];
     });
     var keys = Object.keys(jobs);
     if (!keys.length) { schedule(); return; }
@@ -709,6 +730,11 @@
       });
     }, Promise.resolve()).then(function(){
       if (loggedOut) { markBrokerDisconnected(); return; } // stop polling until the page is reloaded after connecting
+      // Futures legs read futures[] from any chain fetched for their symbol.
+      Object.keys(chains).forEach(function(k){
+        var sym = k.split('|')[0];
+        if (!chains[sym + '|']) chains[sym + '|'] = chains[k];
+      });
       var changed = false;
       positions.forEach(function(p){
         if (!p.raw) return;
@@ -971,7 +997,8 @@
   // connected, MCX, unknown symbol) -- rows just keep their dashes.
   function refreshUnderlyingQuotes(){
     if (!positions.length) return;
-    fetch('/api/fyers/quotes')
+    var syms = positions.map(function(p){ return p.symbol; }).filter(function(v, i, a){ return v && a.indexOf(v) === i; });
+    fetch('/api/fyers/quotes?symbols=' + encodeURIComponent(syms.join(',')))
       .then(function(res){ return res.json(); })
       .then(function(body){
         var quotes = body && body.quotes;

@@ -55,14 +55,18 @@ async function fetchAllQuotes(symbols, authHeader) {
 
   for (let i = 0; i < chunks.length; i += BATCH_CONCURRENCY) {
     const batch = chunks.slice(i, i + BATCH_CONCURRENCY);
-    // A chunk that fails (rate limit, one bad symbol rejecting its whole
-    // request) is retried once, then skipped -- one bad chunk must not blank
-    // every F&O row, only its own symbols.
+    // A chunk that fails (one bad symbol rejecting its whole request) is
+    // skipped -- it must not blank every F&O row, only its own symbols. No
+    // retry: failed calls still count against the daily quota. If a whole
+    // batch fails (rate/quota limit) stop instead of burning the rest.
+    let batchFailed = 0;
     const results = await Promise.all(batch.map((c) =>
-      fetchChunk(c, authHeader).catch(() => sleep(500).then(() => fetchChunk(c, authHeader))).catch((err) => {
+      fetchChunk(c, authHeader).catch((err) => {
         failures.push(err.message);
+        batchFailed++;
         return [];
       })));
+    if (batchFailed === batch.length) throw new Error(failures[0]);
     for (const entries of results) {
       for (const entry of entries) {
         if (entry.s === 'ok' && entry.v && entry.v.lp !== undefined) {
@@ -78,7 +82,18 @@ async function fetchAllQuotes(symbols, authHeader) {
   return prices;
 }
 
-module.exports = async (req, res) => {
+// Fyers Standard plan data-API budget: 5 req/s, 50 req/min, 5,000 req/day.
+// A full F&O poll is ~18 calls, so prices are cached here (warm-lambda
+// memory, shared by every page and tab) and only symbols older than
+// PRICE_TTL_MS are re-fetched. Requests are also serialised so two pages
+// polling at once don't both pay for the same refresh. ?symbols=A,B limits
+// a request to those F&O symbols (watchlist/positions need a handful, not
+// all ~210).
+const PRICE_TTL_MS = 100 * 1000;
+const priceCache = new Map(); // fyers symbol -> { lp, chp, ts }
+let queue = Promise.resolve();
+
+async function handle(req, res) {
   const cookies = parseCookies(req);
   const accessToken = cookies.fyers_session;
   const appId = process.env.FYERS_APP_ID;
@@ -91,8 +106,13 @@ module.exports = async (req, res) => {
   try {
     const instrumentMap = await getInstrumentMap();
 
+    const only = typeof req.query.symbols === 'string' && req.query.symbols
+      ? new Set(req.query.symbols.split(',').map((x) => x.trim().toUpperCase()))
+      : null;
+    const wanted = Object.keys(instrumentMap).filter((sym) => !only || only.has(sym));
+
     const symbols = Object.values(INDEX_SYMBOLS).slice();
-    for (const symbol in instrumentMap) {
+    for (const symbol of wanted) {
       const { spotSymbol, futures } = instrumentMap[symbol];
       symbols.push(spotSymbol);
       futures.forEach((f) => symbols.push(f.symbol));
@@ -103,11 +123,27 @@ module.exports = async (req, res) => {
     // chunk isn't wasting a slot on a symbol already requested elsewhere.
     const uniqueSymbols = Array.from(new Set(symbols));
 
-    const authHeader = `${appId}:${accessToken}`;
-    const prices = await fetchAllQuotes(uniqueSymbols, authHeader);
+    const now = Date.now();
+    const stale = uniqueSymbols.filter((sym) => {
+      const c = priceCache.get(sym);
+      return !c || now - c.ts > PRICE_TTL_MS;
+    });
+    let isStale = false;
+    if (stale.length) {
+      try {
+        const fresh = await fetchAllQuotes(stale, `${appId}:${accessToken}`);
+        fresh.forEach((v, sym) => priceCache.set(sym, { lp: v.lp, chp: v.chp, ts: Date.now() }));
+      } catch (err) {
+        // Rate/quota error: serve whatever is cached rather than blanking
+        // the page; only fail if there is nothing to show at all.
+        if (!uniqueSymbols.some((sym) => priceCache.has(sym))) throw err;
+        isStale = true;
+      }
+    }
+    const prices = priceCache;
 
     const out = {};
-    for (const symbol in instrumentMap) {
+    for (const symbol of wanted) {
       const { spotSymbol, futures } = instrumentMap[symbol];
       const spot = prices.get(spotSymbol);
       out[symbol] = {
@@ -127,10 +163,16 @@ module.exports = async (req, res) => {
       indices[name] = p ? p.lp : null;
     }
 
-    res.status(200).json({ status: 'ok', quotes: out, indices });
+    res.status(200).json({ status: 'ok', quotes: out, indices, stale: isStale });
   } catch (err) {
     res.status(502).json({ error: 'quote_fetch_failed', message: err.message });
   }
+}
+
+module.exports = (req, res) => {
+  const run = queue.then(() => handle(req, res));
+  queue = run.catch(() => {});
+  return run;
 };
 
 module.exports.chunk = chunk;

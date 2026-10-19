@@ -541,7 +541,19 @@
   // Fyers' 200 req/min cap with limited headroom, so two concurrent tabs
   // polling continuously can exceed it. Fine for occasional side-by-side
   // use; revisit with shared cross-tab polling if that becomes a problem.
-  var QUOTE_POLL_MS = 6000;
+  // Fyers Standard plan data budget is 50 req/min and 5,000/day, so polling
+  // pauses outside trading hours (IST, Mon-Fri; NSE 09:00-15:35, MCX to
+  // 23:30). Holidays aren't modelled. Each page still fetches once on load.
+  function marketOpen(mcx){
+    var parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+    var get = function(t){ return parts.filter(function(x){ return x.type === t; })[0].value; };
+    var day = get('weekday');
+    if (day === 'Sat' || day === 'Sun') return false;
+    var mins = (Number(get('hour')) % 24) * 60 + Number(get('minute'));
+    return mins >= 540 && mins <= (mcx ? 1410 : 935);
+  }
+  var QUOTE_POLL_MS = 60000;
+  var quotePolledOnce = false;
   function fetchJsonSafe(url){
     return fetch(url)
       .then(function(res){ return res.json().then(function(body){ return { status: res.status, body: body }; }); })
@@ -556,7 +568,14 @@
     // /api/fyers/quotes -- only fetch mcx-quotes.js when the watchlist
     // actually needs it, to avoid a wasted request every poll otherwise.
     var needsMcx = watchlist.some(function(s){ return MCX_SYMBOL_SET.has(s); });
-    var requests = [fetchJsonSafe('/api/fyers/quotes')];
+    var nfoSymbols = watchlist.filter(function(s){ return !MCX_SYMBOL_SET.has(s); });
+    if (quotePolledOnce && (document.hidden || !marketOpen(needsMcx && !nfoSymbols.length))) {
+      setTimeout(pollQuotes, QUOTE_POLL_MS);
+      return;
+    }
+    quotePolledOnce = true;
+    // Only the watchlisted symbols -- the full F&O feed is ~18 Fyers calls.
+    var requests = [nfoSymbols.length ? fetchJsonSafe('/api/fyers/quotes?symbols=' + encodeURIComponent(nfoSymbols.join(','))) : Promise.resolve(null)];
     if (needsMcx) requests.push(fetchJsonSafe('/api/fyers/mcx-quotes'));
 
     Promise.all(requests).then(function(results){
@@ -783,9 +802,11 @@
       });
   }
 
-  var CHAIN_POLL_MS = 6000;
+  var CHAIN_POLL_MS = 60000;
+  var chainPolledOnce = false;
   function pollChain(){
-    if (selectedSymbol) fetchChain();
+    var skip = chainPolledOnce && (document.hidden || !marketOpen(MCX_SYMBOL_SET.has(selectedSymbol)));
+    if (selectedSymbol && !skip) { chainPolledOnce = true; fetchChain(); }
     setTimeout(pollChain, CHAIN_POLL_MS);
   }
 

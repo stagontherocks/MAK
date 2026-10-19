@@ -206,7 +206,10 @@
     });
   });
 
-  var BATCH_LIMIT = 10;
+  // Fyers Standard plan allows 50 data calls/min: each stock costs one call, so
+  // scan 4 stocks per batch and start batches at least BATCH_PACE_MS apart.
+  var BATCH_LIMIT = 4;
+  var BATCH_PACE_MS = 6000;
   // Bump this key any time gainers.js's response shape changes -- v2 added
   // `ath`, v3 added week52Low/week52High. An old cached scan would otherwise
   // render those columns blank until a manual Refresh.
@@ -376,6 +379,7 @@
   // purely a client-side default-sort/direction difference, not a
   // different data feed.
   function fetchBatch(offset){
+    var batchStart = Date.now();
     fetch('/api/fyers/gainers?offset=' + offset + '&limit=' + BATCH_LIMIT)
       .then(function(res){
         if (res.status === 401) {
@@ -398,7 +402,7 @@
         var scanned = Math.min(offset + BATCH_LIMIT, body.total);
         if (body.nextOffset !== null) {
           statusEl.textContent = 'Scanning ' + scanned + '/' + body.total + '...';
-          fetchBatch(body.nextOffset);
+          setTimeout(function(){ fetchBatch(body.nextOffset); }, Math.max(0, BATCH_PACE_MS - (Date.now() - batchStart)));
         } else {
           statusEl.textContent = 'Done — ' + rows.length + ' of ' + body.total + ' F&O stocks.';
           isScanning = false;

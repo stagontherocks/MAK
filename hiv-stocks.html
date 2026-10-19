@@ -153,7 +153,10 @@
     });
   });
 
-  var BATCH_LIMIT = 10;
+  // Fyers Standard plan allows 50 data calls/min: each stock costs one call, so
+  // scan 4 stocks per batch and start batches at least BATCH_PACE_MS apart.
+  var BATCH_LIMIT = 4;
+  var BATCH_PACE_MS = 8000;
   var CACHE_KEY = 'hivScreenerCache_v1';
   var rows = [];
   var isScanning = false;
@@ -194,6 +197,7 @@
   }
 
   function fetchBatch(offset){
+    var batchStart = Date.now();
     fetch('/api/fyers/screener?offset=' + offset + '&limit=' + BATCH_LIMIT)
       .then(function(res){
         if (res.status === 401) {
@@ -216,7 +220,7 @@
         var scanned = Math.min(offset + BATCH_LIMIT, body.total);
         if (body.nextOffset !== null) {
           statusEl.textContent = 'Screening ' + scanned + '/' + body.total + '...';
-          fetchBatch(body.nextOffset);
+          setTimeout(function(){ fetchBatch(body.nextOffset); }, Math.max(0, BATCH_PACE_MS - (Date.now() - batchStart)));
         } else {
           statusEl.textContent = 'Done — ' + rows.length + ' match' + (rows.length === 1 ? '' : 'es') + ' found (of ' + body.total + ' F&O stocks screened).';
           isScanning = false;

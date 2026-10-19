@@ -77,7 +77,7 @@ async function fetchFutures(futureContracts, authHeader) {
   return futures;
 }
 
-module.exports = async (req, res) => {
+async function handleChain(req, res) {
   const cookies = parseCookies(req);
   const accessToken = cookies.fyers_session;
   const appId = process.env.FYERS_APP_ID;
@@ -202,4 +202,32 @@ module.exports = async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: 'option_chain_fetch_failed', message: err.message });
   }
+}
+
+// Fyers Standard plan data-API budget is 50 req/min and 5,000/day, and each
+// chain costs 2 calls (chain + futures quotes). The builder, watchlist and
+// positions pages all poll chains, so successful responses are cached
+// briefly per symbol+expiry and shared between them.
+const CHAIN_TTL_MS = 25 * 1000;
+const chainCache = new Map(); // key -> { body, ts }
+
+module.exports = async (req, res) => {
+  const token = parseCookies(req).fyers_session || '';
+  const key = `${token.slice(-12)}|${String(req.query.symbol || '').toUpperCase()}|${req.query.expiry || ''}`;
+  const hit = chainCache.get(key);
+  if (hit && Date.now() - hit.ts < CHAIN_TTL_MS) {
+    res.status(200).json(hit.body);
+    return;
+  }
+  let code = 200;
+  const wrapped = Object.create(res);
+  wrapped.status = (c) => { code = c; res.status(c); return wrapped; };
+  wrapped.json = (body) => {
+    if (code === 200) {
+      if (chainCache.size > 50) chainCache.clear();
+      chainCache.set(key, { body, ts: Date.now() });
+    }
+    return res.json(body);
+  };
+  return handleChain(req, wrapped);
 };

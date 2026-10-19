@@ -635,11 +635,28 @@
     fetch('/api/fyers/logout').catch(function(){}).then(function(){ markBrokerDisconnected(); });
   });
 
-  var QUOTE_POLL_MS = 60000; // 1 min: a full F&O poll is ~18 Fyers calls, and the Standard plan allows 5/s
+  // Fyers Standard plan data budget is 50 req/min and 5,000/day, so polling
+  // pauses outside trading hours (IST, Mon-Fri; NSE 09:00-15:35, MCX to
+  // 23:30). Holidays aren't modelled. Each page still fetches once on load.
+  function marketOpen(mcx){
+    var parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+    var get = function(t){ return parts.filter(function(x){ return x.type === t; })[0].value; };
+    var day = get('weekday');
+    if (day === 'Sat' || day === 'Sun') return false;
+    var mins = (Number(get('hour')) % 24) * 60 + Number(get('minute'));
+    return mins >= 540 && mins <= (mcx ? 1410 : 935);
+  }
+  var QUOTE_POLL_MS = 180000; // a full F&O poll is ~17 Fyers calls = ~2,240/day over market hours; Standard plan caps 5,000/day
+  var polledOnce = false;
   var currentSegment = 'fno'; // 'fno' | 'nifty50' | 'mcx' (nifty50 reuses the fno quotes endpoint)
   var pollTimer = null;
 
   function pollQuotes(){
+    if (polledOnce && (document.hidden || !marketOpen(currentSegment === 'mcx'))) {
+      pollTimer = setTimeout(pollQuotes, 30000);
+      return;
+    }
+    polledOnce = true;
     var endpoint = currentSegment === 'mcx' ? '/api/fyers/mcx-quotes' : '/api/fyers/quotes';
     fetch(endpoint)
       .then(function(res){

@@ -1,4 +1,4 @@
-const { fyersFetch, memo } = require('./_fyers');
+const { fyersFetch, memo, counted } = require('./_fyers');
 // api/fyers/gainers.js
 // Backs BOTH top-gainers.html and top-losers.html -- it returns every F&O
 // stock's full 1D/1M/3M/6M period set, so "gainers" vs "losers" is purely a
@@ -212,7 +212,7 @@ async function handler(req, res) {
   }
 }
 
-module.exports = handler;
+module.exports = counted(handler);
 module.exports.computeChanges = computeChanges;
 module.exports.closeNearCutoff = closeNearCutoff;
 module.exports.fiftyTwoWeekLow = fiftyTwoWeekLow;

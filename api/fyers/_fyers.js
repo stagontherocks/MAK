@@ -9,20 +9,47 @@ const BLOCK_MS = 30 * 60 * 1000;
 const DAILY_MSG = 'Fyers daily data limit (5,000 requests/day) reached. Data is paused and will resume automatically when Fyers resets the quota.';
 let blockedUntil = 0;
 
+// Per-request call counting for the nav-bar usage meter: `counted()` wraps a
+// route so every real Fyers call made while serving it (fyersFetch, below) is
+// tallied and reported to the browser as X-Fyers-Calls (cache hits = 0), plus
+// X-Fyers-Limit: daily when the daily quota is exhausted/blocked.
+const { AsyncLocalStorage } = require('async_hooks');
+const callContext = new AsyncLocalStorage();
+
+function counted(handler) {
+  return (req, res) => {
+    const ctx = { calls: 0, limit: false };
+    const wrapped = Object.create(res);
+    wrapped.status = (c) => { res.status(c); return wrapped; };
+    wrapped.json = (body) => {
+      if (res.setHeader) {
+        res.setHeader('X-Fyers-Calls', String(ctx.calls));
+        if (ctx.limit) res.setHeader('X-Fyers-Limit', 'daily');
+      }
+      return res.json(body);
+    };
+    return callContext.run(ctx, () => handler(req, wrapped));
+  };
+}
+
 function isBlocked() {
   return Date.now() < blockedUntil;
 }
 
 async function fyersFetch(url, options) {
+  const ctx = callContext.getStore();
   if (isBlocked()) {
+    if (ctx) ctx.limit = true;
     throw new Error(DAILY_MSG);
   }
+  if (ctx) ctx.calls++;
   const res = await fetch(url, options);
   if (!res.ok || res.status === 429) {
     try {
       const body = await res.clone().json();
       if (body && body.code === -360 && /requests\/day/i.test(String(body.message))) {
         blockedUntil = Date.now() + BLOCK_MS;
+        if (ctx) ctx.limit = true;
       }
     } catch (err) { /* not JSON -- ignore */ }
   }
@@ -80,4 +107,4 @@ function cachedHandler(handler, { key, ttl, parseCookies }) {
   };
 }
 
-module.exports = { fyersFetch, isBlocked, marketOpen, memo, cachedHandler, DAILY_MSG };
+module.exports = { fyersFetch, counted, isBlocked, marketOpen, memo, cachedHandler, DAILY_MSG };

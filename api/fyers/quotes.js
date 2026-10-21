@@ -1,5 +1,5 @@
 const { getInstrumentMap } = require('./_contracts');
-const { fyersFetch, marketOpen } = require('./_fyers');
+const { fyersFetch, marketOpen, counted } = require('./_fyers');
 
 const QUOTES_URL = 'https://api-t1.fyers.in/data/quotes';
 const CHUNK_SIZE = 50;
@@ -172,10 +172,10 @@ async function handle(req, res) {
   }
 }
 
-module.exports = (req, res) => {
+module.exports = counted((req, res) => {
   const run = queue.then(() => handle(req, res));
   queue = run.catch(() => {});
   return run;
-};
+});
 
 module.exports.chunk = chunk;

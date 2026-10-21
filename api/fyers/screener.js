@@ -1,4 +1,4 @@
-const { fyersFetch, memo } = require('./_fyers');
+const { fyersFetch, memo, counted } = require('./_fyers');
 // api/fyers/screener.js
 // High-IV screener: filters the 210 F&O stocks to ones down >=30% from
 // their own 6-month high, ranked by realized-volatility percentile -- a proxy for
@@ -206,6 +206,6 @@ async function handler(req, res) {
   }
 }
 
-module.exports = handler;
+module.exports = counted(handler);
 module.exports.declineFromSixMonthHighPct = declineFromSixMonthHighPct;
 module.exports.volRank = volRank;

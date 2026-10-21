@@ -1,4 +1,4 @@
-const { fyersFetch, marketOpen, cachedHandler } = require('./_fyers');
+const { fyersFetch, marketOpen, cachedHandler, counted } = require('./_fyers');
 const { getInstrumentMap } = require('./_contracts');
 const { getMcxInstrumentMap } = require('./_mcx_contracts');
 const { computeDelta, impliedVol, RISK_FREE_RATE, MIN_T_YEARS } = require('./_blackscholes');
@@ -212,8 +212,8 @@ async function handleChain(req, res) {
 const MCX_SYMBOLS = ['CRUDEOIL', 'NATURALGAS', 'GOLDM', 'SILVERM'];
 const isMcx = (req) => MCX_SYMBOLS.includes(String(req.query.symbol || '').toUpperCase());
 
-module.exports = cachedHandler(handleChain, {
+module.exports = counted(cachedHandler(handleChain, {
   key: (req) => `${String(req.query.symbol || '').toUpperCase()}|${req.query.expiry || ''}`,
   ttl: (req) => (marketOpen(isMcx(req)) ? 50 * 1000 : 30 * 60 * 1000),
   parseCookies,
-});
+}));

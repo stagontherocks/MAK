@@ -1,4 +1,4 @@
-const { fyersFetch, marketOpen, cachedHandler } = require('./_fyers');
+const { fyersFetch, marketOpen, cachedHandler, counted } = require('./_fyers');
 const { getMcxInstrumentMap } = require('./_mcx_contracts');
 
 const QUOTES_URL = 'https://api-t1.fyers.in/data/quotes';
@@ -75,8 +75,8 @@ async function handle(req, res) {
 
 // One call per poll, shared by every page/tab: 50s while MCX is open, 30 min
 // when it isn't (prices can't move).
-module.exports = cachedHandler(handle, {
+module.exports = counted(cachedHandler(handle, {
   key: () => 'mcx',
   ttl: () => (marketOpen(true) ? 50 * 1000 : 30 * 60 * 1000),
   parseCookies,
-});
+}));

@@ -378,7 +378,34 @@
     #builderContent{flex:1;min-height:0}
     #builderContent[hidden]{display:none}
   }
+
+  /* ---------- futures average-or-new-leg modal ---------- */
+  .fut-overlay{
+    position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);
+    display:flex;align-items:center;justify-content:center;padding:20px;
+  }
+  .fut-overlay[hidden]{display:none}
+  .fut-box{
+    background:#161616;border:1px solid #262626;border-radius:12px;
+    width:100%;max-width:440px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .fut-heading{font-size:18px;font-weight:700;margin-bottom:10px}
+  .fut-text{font-size:13px;line-height:1.5;color:#b5b5b5}
+  .fut-preview{
+    margin-top:14px;padding:12px 14px;border-radius:8px;background:#1c1c1c;border:1px solid #262626;
+    font-size:13px;line-height:1.7;color:#eeeeee;
+  }
+  .fut-preview b{font-weight:700}
+  .fut-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;flex-wrap:wrap}
+  .fut-btn{
+    padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;
+    cursor:pointer;border:1px solid #262626;background:#1c1c1c;color:#eeeeee;transition:background .15s ease;
+  }
+  .fut-btn:hover{background:#262626}
+  .fut-btn-primary{background:#2ecc71;color:#0d1f14;border-color:transparent}
+  .fut-btn-primary:hover{background:#3ee082}
 </style>
+<script src="source/fyers-usage.js?v=1"></script>
 </head>
 <body>
 
@@ -513,6 +540,19 @@
     </div>
   </div>
 </main>
+
+<div class="fut-overlay" id="futOverlay" hidden>
+  <div class="fut-box" role="dialog" aria-modal="true" aria-labelledby="futHeading">
+    <div class="fut-heading" id="futHeading">Futures leg already added</div>
+    <div class="fut-text" id="futText"></div>
+    <div class="fut-preview" id="futPreview"></div>
+    <div class="fut-actions">
+      <button type="button" class="fut-btn" id="futCancelBtn">Cancel</button>
+      <button type="button" class="fut-btn" id="futNewBtn">Add as new leg</button>
+      <button type="button" class="fut-btn fut-btn-primary" id="futAvgBtn">Average existing</button>
+    </div>
+  </div>
+</div>
 
 <script>
   var connectBtn = document.getElementById('connectBtn');
@@ -1170,16 +1210,82 @@
     var existing = legs.find(function(l){
       return isOpen(l) && l.action === action && l.type === type && l.strike === strike && String(l.expiry) === String(expiry);
     });
+    if (existing && type === 'FUT') {
+      // Same futures contract and side already in the strategy: let the user
+      // pick between averaging into it and a separate leg. (Options keep the
+      // old behaviour of just adding a lot to the matching leg.)
+      askFutAverage(existing, action, expiry);
+      return;
+    }
     if (existing) {
       existing.lots += 1;
     } else {
-      legs.push({ id: ++legSeq, action: action, type: type, strike: strike, expiry: String(expiry),
-        lots: 1, entry: null, ltp: null, exitPrice: null, included: true });
+      pushLeg(action, type, strike, expiry);
     }
     priceLegs();
     renderBuilder();
     fetchLegChains();
   }
+
+  function pushLeg(action, type, strike, expiry){
+    legs.push({ id: ++legSeq, action: action, type: type, strike: strike, expiry: String(expiry),
+      lots: 1, entry: null, ltp: null, exitPrice: null, included: true });
+  }
+
+  // ---------- Futures: average existing leg or add a new one ----------
+  var futOverlay = document.getElementById('futOverlay');
+  var futPending = null; // { leg, action, expiry, price, newEntry }
+  function closeFutModal(){ futOverlay.hidden = true; futPending = null; }
+  function askFutAverage(existing, action, expiry){
+    var price = quoteFor({ type: 'FUT', expiry: expiry });
+    // Weighted by lots (every lot is the same size): the new lot comes in at
+    // the current futures price. Without a live price or an entry to average
+    // from, averaging just adds the lot and leaves the entry as is.
+    var canAverage = price !== null && existing.entry !== null;
+    var newEntry = canAverage ? Math.round(((existing.entry * existing.lots + price) / (existing.lots + 1)) * 100) / 100 : existing.entry;
+    futPending = { leg: existing, action: action, expiry: expiry, newEntry: newEntry };
+    var lotWord = function(n){ return n + (n === 1 ? ' lot' : ' lots'); };
+    document.getElementById('futText').textContent =
+      'This strategy already has a ' + action + ' ' + selectedSymbol + ' futures leg for ' + fmtExpiryCompact(Number(expiry)) +
+      '. Do you want to average the existing leg, or add this as a separate new leg?';
+    var preview = document.getElementById('futPreview');
+    preview.textContent = '';
+    var line = function(label, value){
+      var row = document.createElement('div');
+      row.appendChild(document.createTextNode(label + ' '));
+      var b = document.createElement('b'); b.textContent = value; row.appendChild(b);
+      preview.appendChild(row);
+    };
+    line('Existing leg:', lotWord(existing.lots) + (existing.entry !== null ? ' @ ' + fmtNum(existing.entry) : ''));
+    if (canAverage) {
+      line('Current price:', fmtNum(price));
+      line('After averaging:', lotWord(existing.lots + 1) + ' @ ' + fmtNum(newEntry));
+    } else {
+      line('After averaging:', lotWord(existing.lots + 1) + ' (live price not available yet, entry stays the same)');
+    }
+    futOverlay.hidden = false;
+    document.getElementById('futAvgBtn').focus();
+  }
+  function finishFutAdd(){
+    closeFutModal();
+    priceLegs();
+    renderBuilder();
+    fetchLegChains();
+  }
+  document.getElementById('futAvgBtn').addEventListener('click', function(){
+    if (!futPending) return;
+    futPending.leg.lots += 1;
+    futPending.leg.entry = futPending.newEntry;
+    finishFutAdd();
+  });
+  document.getElementById('futNewBtn').addEventListener('click', function(){
+    if (!futPending) return;
+    pushLeg(futPending.action, 'FUT', null, futPending.expiry);
+    finishFutAdd();
+  });
+  document.getElementById('futCancelBtn').addEventListener('click', closeFutModal);
+  futOverlay.addEventListener('click', function(e){ if (e.target === futOverlay) closeFutModal(); });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !futOverlay.hidden) closeFutModal(); });
 
   function onBsClick(e){
     var btn = e.target.closest('.bs-btn');
